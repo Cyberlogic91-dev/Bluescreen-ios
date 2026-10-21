@@ -57,6 +57,7 @@ jobs:
           python3 scripts/update_source.py "$VERSION" "$BUILD" "$SIZE" "https://github.com/${{ github.repository }}/releases/download/$TAG/BlueScreen.ipa"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add altstore/source.json
+          mkdir -p docs/altstore && cp altstore/source.json docs/altstore/source.json
+          git add altstore/source.json docs/altstore/source.json
           git commit -m "Source AltStore : BlueScreen $VERSION ($BUILD) [skip ci]" || exit 0
           git pull --rebase origin main && git push origin HEAD:main

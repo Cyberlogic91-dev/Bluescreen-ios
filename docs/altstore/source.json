@@ -1,0 +1,48 @@
+{
+  "name": "CYBERLOGIC",
+  "identifier": "fr.cyberlogic.source",
+  "subtitle": "Les applis de CYBERLOGIC",
+  "description": "Applications éditées par CYBERLOGIC, Draveil (91). www.cyberlogic.fr",
+  "iconURL": "https://jeu.cyberlogic.fr/icons/icon-512.png",
+  "website": "https://jeu.cyberlogic.fr",
+  "tintColor": "#1677FF",
+  "apps": [
+    {
+      "name": "BlueScreen",
+      "bundleIdentifier": "fr.cyberlogic.bluescreen",
+      "developerName": "CYBERLOGIC",
+      "subtitle": "Le jeu qui fait planter",
+      "localizedDescription": "Montez un PC à plusieurs sans le faire planter ! Jeu de cartes édité par CYBERLOGIC : solo contre des robots, mode histoire de 112 niveaux, parties à plusieurs sur le même téléphone ou en Wi-Fi local, PC en 3D qui se monte en direct et BIOS qui démarre au fil du montage.",
+      "iconURL": "https://jeu.cyberlogic.fr/icons/icon-512.png",
+      "tintColor": "#1677FF",
+      "category": "games",
+      "screenshotURLs": [],
+      "versions": [
+        {
+          "version": "3.8",
+          "buildVersion": "32",
+          "date": "2026-10-21",
+          "localizedDescription": "BlueScreen 3.8 (build 32).",
+          "downloadURL": "https://github.com/Cyberlogic91-dev/Bluescreen-ios/releases/download/v3.8-32/BlueScreen.ipa",
+          "size": 2025414,
+          "minOSVersion": "16.0"
+        },
+        {
+          "version": "3.7",
+          "buildVersion": "31",
+          "date": "2026-10-21",
+          "localizedDescription": "BlueScreen 3.7 (build 31).",
+          "downloadURL": "https://github.com/Cyberlogic91-dev/Bluescreen-ios/releases/download/v3.7-31/BlueScreen.ipa",
+          "size": 2023087,
+          "minOSVersion": "16.0"
+        }
+      ],
+      "version": "3.8",
+      "versionDate": "2026-10-21",
+      "versionDescription": "BlueScreen 3.8 (build 32).",
+      "downloadURL": "https://github.com/Cyberlogic91-dev/Bluescreen-ios/releases/download/v3.8-32/BlueScreen.ipa",
+      "size": 2025414
+    }
+  ],
+  "news": []
+}

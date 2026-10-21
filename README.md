@@ -53,7 +53,7 @@ sur les **ventes numériques** : BlueScreen étant gratuit et sans achat intégr
    (Utilisateurs et accès > Intégrations > Marketplaces).
 3. Envoyer la version (Xcode ou GitHub Actions) puis demander la **notarisation** (et non la revue App Store).
 4. Télécharger le paquet de distribution (manifest.json, signature, .ipa) et le déposer tel quel sur
-   `https://www.cyberlogic.fr/bluescreen/ios/…` (`.ipa` servi en `application/octet-stream`).
+   `https://jeu.cyberlogic.fr/ios/…` (`.ipa` servi en `application/octet-stream`).
 5. Compléter `distribution/source.json` (Apple ID de l'app, URL du manifest, taille) et le publier.
 6. Les joueurs : installer AltStore PAL puis toucher le lien `altstore://source?url=…/source.json`
    (page prête : `distribution/installer.html`).
@@ -69,6 +69,11 @@ signés et les héberger sur le site. Les joueurs autorisent une fois les instal
 dans les Réglages (iOS 17.5 ou plus).
 
 ### En attendant : la version web
-Le dossier `BlueScreen-web` (livré à côté) s'installe sur l'écran d'accueil de n'importe quel iPhone,
+En ligne sur **https://jeu.cyberlogic.fr** (GitHub Pages, dossier `docs/`, domaine via un CNAME OVH). Le dossier `BlueScreen-web` (livré à côté) s'installe sur l'écran d'accueil de n'importe quel iPhone,
 sans Apple, sans frais, partout dans le monde. Seule limite : un iPhone ne peut pas **héberger** une partie
 Wi-Fi en version web (il peut rejoindre une partie créée par un téléphone Android ou par l'appli iOS).
+
+## 4. Version gratuite actuelle (sans compte payant)
+- **Web** : https://jeu.cyberlogic.fr (proposition d'installation automatique iPhone / Android).
+- **AltStore Classic** : source `https://jeu.cyberlogic.fr/altstore/source.json`
+  (lien : `altstore://source?url=https://jeu.cyberlogic.fr/altstore/source.json`), mise à jour automatique à chaque compilation.
