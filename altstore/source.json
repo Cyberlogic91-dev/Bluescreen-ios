@@ -19,6 +19,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "3.8",
+          "buildVersion": "32",
+          "date": "2026-10-21",
+          "localizedDescription": "BlueScreen 3.8 (build 32).",
+          "downloadURL": "https://github.com/Cyberlogic91-dev/Bluescreen-ios/releases/download/v3.8-32/BlueScreen.ipa",
+          "size": 2025414,
+          "minOSVersion": "16.0"
+        },
+        {
           "version": "3.7",
           "buildVersion": "31",
           "date": "2026-10-21",
@@ -28,11 +37,11 @@
           "minOSVersion": "16.0"
         }
       ],
-      "version": "3.7",
+      "version": "3.8",
       "versionDate": "2026-10-21",
-      "versionDescription": "BlueScreen 3.7 (build 31).",
-      "downloadURL": "https://github.com/Cyberlogic91-dev/Bluescreen-ios/releases/download/v3.7-31/BlueScreen.ipa",
-      "size": 2023087
+      "versionDescription": "BlueScreen 3.8 (build 32).",
+      "downloadURL": "https://github.com/Cyberlogic91-dev/Bluescreen-ios/releases/download/v3.8-32/BlueScreen.ipa",
+      "size": 2025414
     }
   ],
   "news": []
