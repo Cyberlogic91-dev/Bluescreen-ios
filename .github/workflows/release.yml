@@ -1,0 +1,47 @@
+# Version signée de BlueScreen envoyée vers App Store Connect (pour la notarisation → AltStore PAL).
+# Secrets du dépôt (Settings › Secrets and variables › Actions › New repository secret) :
+#   APPLE_TEAM_ID  : Team ID (developer.apple.com › Membership)
+#   ASC_KEY_ID     : identifiant de la clé API App Store Connect (rôle Admin)
+#   ASC_ISSUER_ID  : Issuer ID affiché au-dessus de la liste des clés
+#   ASC_KEY_P8     : contenu complet du fichier AuthKey_XXXXXXXXXX.p8 (lignes BEGIN/END comprises)
+name: Envoi App Store Connect (signé)
+on:
+  workflow_dispatch:
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Projet Xcode
+        run: brew install xcodegen && xcodegen generate
+      - name: Clé API App Store Connect
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s\n' "${{ secrets.ASC_KEY_P8 }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+      - name: Archive signée (signature automatique gérée par Apple)
+        run: |
+          set -o pipefail
+          xcodebuild -project BlueScreen.xcodeproj -scheme BlueScreen -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/BlueScreen.xcarchive \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION=$((100 + ${{ github.run_number }})) \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.ASC_KEY_ID }} -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
+            archive | tee archive.log | grep -E "error:|ARCHIVE" || true
+          test -d build/BlueScreen.xcarchive
+      - name: Envoi vers App Store Connect
+        run: |
+          set -o pipefail
+          sed -i '' "s/XXXXXXXXXX/${{ secrets.APPLE_TEAM_ID }}/" ExportOptions.plist
+          xcodebuild -exportArchive -archivePath build/BlueScreen.xcarchive -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/export -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.ASC_KEY_ID }}.p8 \
+            -authenticationKeyID ${{ secrets.ASC_KEY_ID }} -authenticationKeyIssuerID ${{ secrets.ASC_ISSUER_ID }} \
+            | tee export.log | tail -20
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: journaux-envoi
+          path: "*.log"

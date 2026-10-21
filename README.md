@@ -22,7 +22,7 @@ Dans `project.yml` (ou dans Xcode > Signing), remplace `XXXXXXXXXX` par ton **Te
 Branche un iPhone et lance : le jeu tourne directement sur ton téléphone (avec un compte développeur
 gratuit, l'appli expire au bout de 7 jours ; avec le compte payant, 1 an).
 
-**Sans Mac :** le fichier `.github/workflows/ios.yml` compile et envoie l'appli vers App Store Connect
+**Sans Mac :** le fichier `.github/workflows/release.yml` compile et envoie l'appli vers App Store Connect
 depuis GitHub (machines macOS fournies par GitHub). Il faut créer une clé API App Store Connect et
 renseigner les secrets indiqués en tête du fichier.
 
