@@ -1,0 +1,38 @@
+# Compile BlueScreen sur un Mac GitHub (Xcode) et produit un .ipa non signé,
+# à installer sur son iPhone avec Sideloadly ou AltStore Classic (identifiant Apple gratuit, 7 jours).
+name: Compilation iOS (IPA non signé)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app && xcodebuild -version
+      - name: Projet Xcode (XcodeGen)
+        run: brew install xcodegen && xcodegen generate
+      - name: Compilation
+        run: |
+          set -o pipefail
+          xcodebuild -project BlueScreen.xcodeproj -scheme BlueScreen -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tee build.log | grep -E "error|warning: |BUILD" || true
+          test -d build/Build/Products/Release-iphoneos/BlueScreen.app
+      - name: Paquet IPA
+        run: |
+          mkdir -p Payload && cp -R build/Build/Products/Release-iphoneos/BlueScreen.app Payload/
+          zip -qry BlueScreen-unsigned.ipa Payload
+          ls -la BlueScreen-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BlueScreen-ipa
+          path: BlueScreen-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: journal-compilation
+          path: build.log

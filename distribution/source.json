@@ -1,0 +1,33 @@
+{
+  "name": "CYBERLOGIC",
+  "subtitle": "Les applis de CYBERLOGIC",
+  "description": "Applications éditées par CYBERLOGIC, Draveil (91).",
+  "iconURL": "https://www.cyberlogic.fr/bluescreen/icons/icon-512.png",
+  "website": "https://www.cyberlogic.fr",
+  "tintColor": "#1677FF",
+  "apps": [
+    {
+      "name": "BlueScreen",
+      "bundleIdentifier": "fr.cyberlogic.bluescreen",
+      "marketplaceID": "REMPLACER_PAR_APPLE_ID_DE_L_APP",
+      "developerName": "CYBERLOGIC",
+      "subtitle": "Le jeu qui fait planter",
+      "localizedDescription": "Montez un PC à plusieurs sans le faire planter ! Jeu de cartes édité par CYBERLOGIC : solo, mode histoire de 112 niveaux, parties en Wi-Fi local, vue 3D, et le BIOS qui démarre au fil du montage.",
+      "iconURL": "https://www.cyberlogic.fr/bluescreen/icons/icon-512.png",
+      "tintColor": "#1677FF",
+      "category": "games",
+      "screenshots": [],
+      "versions": [
+        {
+          "version": "3.7",
+          "buildVersion": "31",
+          "date": "2026-10-21",
+          "localizedDescription": "Première version iOS.",
+          "downloadURL": "https://www.cyberlogic.fr/bluescreen/ios/REMPLACER/manifest.json",
+          "size": 0,
+          "minOSVersion": "17.4"
+        }
+      ]
+    }
+  ]
+}
