@@ -4,6 +4,9 @@ name: Compilation iOS (IPA non signé)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "altstore/**"
   workflow_dispatch:
 permissions:
   contents: write
