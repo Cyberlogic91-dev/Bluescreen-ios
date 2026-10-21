@@ -17,16 +17,28 @@ small{color:#9FB3D9}
 <h1><span>BLUE</span>SCREEN</h1>
 <p class="sub">Le jeu qui fait planter · édité par CYBERLOGIC</p>
 
-<div class="card"><h2>1. Le plus simple : la version web</h2>
+<div class="card" id="cWeb"><h2>1. Le plus simple : la version web</h2>
 <p>Sur tous les iPhone, dans tous les pays. Ouvre le jeu dans Safari, touche <b>Partager</b> puis <b>Sur l'écran d'accueil</b>. Il se lance ensuite comme une appli, même hors ligne.</p>
 <a class="btn" href="../">Jouer dans Safari</a></div>
 
-<div class="card"><h2>2. L'appli iPhone (gratuite, avec AltStore)</h2>
+<div class="card" id="cAlt"><h2>2. L'appli iPhone (gratuite, avec AltStore)</h2>
 <p>Installe <b>AltStore Classic</b> depuis ton ordinateur (AltServer, Windows ou Mac), puis ajoute la source CYBERLOGIC : BlueScreen s'installe avec ton identifiant Apple, et se met à jour tout seul.</p>
 <a class="btn ghost" href="https://altstore.io">Installer AltStore Classic</a>
 <a class="btn" href="altstore://source?url=https://raw.githubusercontent.com/Cyberlogic91-dev/Bluescreen-ios/main/altstore/source.json">Ajouter la source CYBERLOGIC</a>
 <p><small>Avec un identifiant Apple gratuit, AltStore renouvelle l'appli tous les 7 jours (ordinateur avec AltServer allumé sur le même Wi-Fi). Fichier direct : <a style="color:#9FB3D9" href="https://github.com/Cyberlogic91-dev/Bluescreen-ios/releases/latest/download/BlueScreen.ipa">BlueScreen.ipa</a></small></p></div>
 
-<div class="card"><h2>Sur Android</h2><a class="btn ghost" href="../android/BlueScreen.apk">Télécharger l'APK</a></div>
+<div class="card" id="cAnd"><h2>Sur Android</h2><a class="btn ghost" href="../android/BlueScreen.apk">Télécharger l'APK</a></div>
 <p><small>CYBERLOGIC · Draveil (91) · contact@cyberlogic.fr</small></p>
-</main></body></html>
+<p id="detect" style="text-align:center;color:#FACC15;font-weight:700"></p>
+</main>
+<script>
+(function(){
+  var ua=navigator.userAgent, ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1), and=/Android/i.test(ua);
+  var m=document.querySelector("main"), d=document.getElementById("detect"), w=document.getElementById("cWeb"), a=document.getElementById("cAlt"), n=document.getElementById("cAnd");
+  if(ios){ d.textContent="📱 iPhone détecté"; n.style.display="none"; w.querySelector("h2").textContent="Installer sur ton iPhone"; w.querySelector("p").innerHTML="Ouvre le jeu dans <b>Safari</b>, touche <b>Partager</b> puis <b>Sur l'écran d'accueil</b>. C'est gratuit, sans compte, et ça marche même hors ligne."; }
+  else if(and){ d.textContent="🤖 Android détecté"; a.style.display="none"; m.insertBefore(n, w); n.querySelector("h2").textContent="Installer sur ton Android"; w.querySelector("h2").textContent="Ou jouer sans rien télécharger"; w.querySelector("p").innerHTML="Ouvre le jeu dans Chrome : il propose <b>Installer l'application</b>."; }
+  else { d.textContent="💻 Ordinateur détecté : ouvre cette page sur ton téléphone pour installer le jeu."; }
+  m.insertBefore(d, m.children[3]);
+})();
+</script>
+</body></html>

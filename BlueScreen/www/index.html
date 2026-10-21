@@ -715,6 +715,31 @@ table.score tr.win td{color:var(--gold);font-weight:800}
 .chatbtn{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 9px;border-radius:999px;border:1px solid #3F4147;background:#2B2D31;color:#DBDEE1;font:inherit;font-size:13px;cursor:pointer;flex:none}
 .chatbtn b{font-size:11px;color:#B5BAC1;font-weight:700}
 .status{gap:6px}
+
+/* ===== proposition d'installation (version web) ===== */
+.inst-ov{position:fixed;inset:0;z-index:80;background:rgba(5,10,25,.6);display:flex;align-items:flex-end;justify-content:center;padding:12px 12px calc(14px + env(safe-area-inset-bottom,0px));animation:dbIn .25s ease}
+.inst-ov.desktop{align-items:center}
+.inst-sheet{width:min(100%,420px);background:#13254A;border:1px solid #2A4478;border-radius:20px;padding:16px 16px 10px;box-shadow:0 18px 50px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:12px;color:var(--ink)}
+.inst-hd{display:flex;align-items:center;gap:12px}
+.inst-hd .brand-mark{width:48px;height:48px;flex:none}
+.inst-hd div{flex:1;display:flex;flex-direction:column}
+.inst-hd b{font-size:17px}
+.inst-hd small{font-size:12px;color:var(--muted)}
+.inst-lead{margin:0;font-size:14px;line-height:1.45;color:#C7D7F5}
+.inst-steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;counter-reset:s}
+.inst-steps li{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.05);border-radius:12px;padding:9px 11px;font-size:14px}
+.inst-steps .ic{flex:none;width:34px;height:34px;border-radius:9px;background:#0A1B3D;color:#5FA0FF;display:flex;align-items:center;justify-content:center;font-weight:900}
+.inst-sheet .btn{width:100%}
+.inst-note{margin:0;font-size:11px;color:var(--muted);line-height:1.4}
+.inst-qr{display:flex;justify-content:center;background:#fff;border-radius:14px;padding:12px;width:max-content;margin:0 auto}
+.inst-ft{display:flex;justify-content:space-between}
+.linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:13px;padding:8px 4px;cursor:pointer}
+.inst-arrow{position:fixed;bottom:2px;left:50%;transform:translateX(-50%);font-size:30px;color:var(--gold);animation:bob .9s ease-in-out infinite;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.inst-ov.arrow-bottom{padding-bottom:calc(44px + env(safe-area-inset-bottom,0px))}
+.tile.tinstall{border-color:var(--gold)}
+.tile.tinstall .ti{background:rgba(250,204,21,.18);color:var(--gold)}
+.inst-sheet a.btn{display:flex;align-items:center;justify-content:center;text-decoration:none;text-align:center;min-height:46px;font-size:15px}
+.inst-steps li>span:last-child{flex:1;line-height:1.35}
 </style>
 </head>
 <body>
@@ -839,6 +864,8 @@ function riskColor(w){const v=w/10;return v<=3?"#16A34A":v<=6?"#CA8A04":v<=8?"#E
 
 
 
+
+
 /* ---------- icônes ---------- */
 const ICON={
  "SOURIS":'<svg viewBox="0 0 40 50"><rect x="8" y="10" width="24" height="36" rx="12" fill="#E5E7EB" stroke="#1F2937" stroke-width="2"/><line x1="20" y1="10" x2="20" y2="25" stroke="#1F2937" stroke-width="2"/><line x1="8" y1="25" x2="32" y2="25" stroke="#1F2937" stroke-width="2"/><rect x="18" y="14" width="4" height="7" rx="2" fill="currentColor"/><path d="M20 10 C20 3 28 6 29 1" fill="none" stroke="#1F2937" stroke-width="2"/></svg>',
@@ -869,7 +896,7 @@ const MODE = window.EB_STANDALONE ? "app" : (location.protocol.indexOf("http") =
 const BRIDGE = (typeof window.EBHost !== "undefined") ? window.EBHost : null;
 const CAN_HOST = MODE === "app" && !!BRIDGE;
 const MAXP = 6;
-const APP_VERSION = "3.7";
+const APP_VERSION = "3.8";
 const APP_DATE = "2026-10-21";   // remplacée par la date de construction (build_page.py)
 function appDateFr() {
   const d = new Date(APP_DATE + "T12:00:00");
@@ -3029,6 +3056,78 @@ const PC3D = (() => {
   return {supported, use, toggle, mount, get reason() { return reason; }, get loaded() { return !!T; }};
 })();
 
+/* ============================== VERSION WEB : proposition d'installation (détection automatique) ============================== */
+const Install = (() => {
+  const web = !!window.EB_STANDALONE && !BRIDGE;
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isIPad = /iPad/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const iosOtherBrowser = isIOS && /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  const installed = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  let deferred = null;   // événement « beforeinstallprompt » d'Android / Chrome
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferred = e; });
+  window.addEventListener("appinstalled", () => { store.set("eb_inst_done", "1"); close(); showToast("BlueScreen est installé !", "gold"); });
+  const platform = () => isIOS ? "ios" : isAndroid ? "android" : "desktop";
+  const canOffer = () => web && !installed() && !store.get("eb_inst_never", "") && !store.get("eb_inst_done", "");
+  const snoozed = () => Date.now() < +store.get("eb_inst_later", "0");
+
+  const SHARE_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 11v9h14v-9"/></svg>';
+  const ADD_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>';
+  const DOTS_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
+
+  function close() { document.querySelectorAll(".inst-ov").forEach(e => e.remove()); }
+
+  function open(force) {
+    if (!force && (!canOffer() || snoozed())) return;
+    close();
+    const p = platform();
+    let body = "";
+    if (p === "ios") {
+      body = iosOtherBrowser
+        ? `<p class="inst-lead">Pour l'installer, ouvre cette page dans <b>Safari</b> (ou utilise le menu de partage de ton navigateur).</p>
+           <ol class="inst-steps"><li><span class="ic">${SHARE_ICON}</span><span>Touche <b>Partager</b></span></li><li><span class="ic">${ADD_ICON}</span><span>Choisis <b>Sur l'écran d'accueil</b></span></li></ol>`
+        : `<p class="inst-lead">Ajoute le jeu sur ton écran d'accueil : il s'ouvrira en plein écran, comme une appli, même sans internet.</p>
+           <ol class="inst-steps"><li><span class="ic">${SHARE_ICON}</span><span>Touche <b>Partager</b> ${isIPad ? "en haut de l'écran" : "en bas de l'écran"}</span></li>
+           <li><span class="ic">${ADD_ICON}</span><span>Fais défiler et choisis <b>Sur l'écran d'accueil</b></span></li><li><span class="ic">✓</span><span>Touche <b>Ajouter</b></span></li></ol>`;
+    } else if (p === "android") {
+      body = `<p class="inst-lead">Installe BlueScreen sur ton téléphone : icône sur l'écran d'accueil, plein écran, fonctionne sans internet.</p>
+        ${deferred ? `<button class="btn" id="instGo">Installer l'application</button>`
+          : `<ol class="inst-steps"><li><span class="ic">${DOTS_ICON}</span><span>Ouvre le menu <b>⋮</b> du navigateur</span></li><li><span class="ic">${ADD_ICON}</span><span>Choisis <b>Installer l'application</b> (ou <b>Ajouter à l'écran d'accueil</b>)</span></li></ol>`}
+        <a class="btn ghost" id="instApk" href="android/BlueScreen.apk" download>Télécharger l'appli complète (APK)</a>
+        <p class="inst-note">L'APK ajoute la création de parties Wi-Fi entre téléphones. Android demandera d'autoriser l'installation depuis ton navigateur.</p>`;
+    } else {
+      body = `<p class="inst-lead">BlueScreen se joue surtout sur téléphone. Scanne ce code avec ton iPhone ou ton Android pour l'ouvrir et l'installer.</p>
+        <div class="inst-qr">${QR.svg(location.href.split("#")[0], 170)}</div>`;
+    }
+    const el = document.createElement("div");
+    el.className = "inst-ov " + p + (p === "ios" && !isIPad && !iosOtherBrowser ? " arrow-bottom" : "");
+    el.innerHTML = `<div class="inst-sheet" role="dialog" aria-label="Installer BlueScreen">
+      <div class="inst-hd">${BRAND.mark}<div><b>Installer BlueScreen</b><small>${p === "ios" ? "Sur ton iPhone" : p === "android" ? "Sur ton Android" : "Sur ton téléphone"} · gratuit</small></div>
+        <button class="icon-btn sm" id="instX" aria-label="Fermer">✕</button></div>
+      ${body}
+      <div class="inst-ft"><button class="linkbtn" id="instLater">Plus tard</button><button class="linkbtn" id="instNever">Ne plus proposer</button></div>
+    </div>${p === "ios" && !isIPad && !iosOtherBrowser ? `<div class="inst-arrow" aria-hidden="true">↓</div>` : ""}`;
+    document.body.appendChild(el);
+    const later = () => { store.set("eb_inst_later", String(Date.now() + 3 * 864e5)); close(); };
+    el.onclick = e => { if (e.target === el) later(); };
+    $("#instX").onclick = later; $("#instLater").onclick = later;
+    $("#instNever").onclick = () => { store.set("eb_inst_never", "1"); close(); };
+    if ($("#instGo")) $("#instGo").onclick = async () => {
+      const d = deferred; deferred = null; if (!d) return;
+      d.prompt();
+      try { const r = await d.userChoice; if (r && r.outcome === "accepted") { store.set("eb_inst_done", "1"); close(); } } catch (e) {}
+    };
+  }
+
+  // proposition automatique : sur l'accueil, peu après l'ouverture (après le splash)
+  function maybeAuto() {
+    if (!canOffer() || snoozed()) return;
+    setTimeout(() => { if (document.querySelector(".home2") && !document.querySelector(".splash,.overlay,.inst-ov")) open(false); }, 3500);
+  }
+  return {web, open, maybeAuto, canOffer, installed, platform};
+})();
+
 /* ============================== CONTEXTE ============================== */
 // "app" : page locale (appli ou fichier) ; "client" : page servie par le téléphone hôte en Wi-Fi.
 const LEVELS = {facile: "Facile", normal: "Normal", expert: "Expert"};
@@ -4212,6 +4311,7 @@ function renderHome() {
         <button class="tile tsmall" id="mRules"><span class="ti">${I.rules}</span><b>Règles</b></button>
         ${firstTime ? "" : `<button class="tile tsmall" id="mTuto"><span class="ti">${I.tuto}</span><b>Tuto</b></button>`}
         <button class="tile tsmall" id="mAbout"><span class="ti">${I.about}</span><b>À propos</b></button>
+        ${Install.canOffer() ? `<button class="tile tsmall tinstall" id="mInstall"><span class="ti">${I.join}</span><b>Installer</b></button>` : ""}
       </div>
     </div>
     <div class="editor">UN JEU ÉDITÉ PAR <b>CYBERLOGIC</b> <span style="opacity:.6">· v${APP_VERSION}</span></div>
@@ -4228,6 +4328,8 @@ function renderHome() {
   $("#mProfile").onclick = () => renderProfile();
   if (CAN_HOST) { $("#mHost").onclick = startLobby; $("#mJoin").onclick = renderJoinApp; }
   $("#mRules").onclick = showRules;
+  if ($("#mInstall")) $("#mInstall").onclick = () => Install.open(true);
+  if (!renderHome.instAsked) { renderHome.instAsked = true; Install.maybeAuto(); }
 }
 function back() { return `<button class="btn ghost" id="bBack">Retour</button>`; }
 function powerPicker(cur) {

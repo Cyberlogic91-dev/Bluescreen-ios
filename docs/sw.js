@@ -1,5 +1,5 @@
 // BlueScreen — service worker : le jeu fonctionne hors ligne une fois ouvert.
-const CACHE = "bluescreen-v3.7-2026-10-21";
+const CACHE = "bluescreen-v3.8-202610211015";
 const FILES = ["./", "index.html", "manifest.webmanifest", "cyberlogic_logo.png", "music/menu.mp3", "music/game.mp3",
   "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
