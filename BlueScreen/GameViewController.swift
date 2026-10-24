@@ -32,7 +32,9 @@ final class GameViewController: UIViewController, WKUIDelegate, WKScriptMessageH
         web.backgroundColor = UIColor(red: 10 / 255, green: 27 / 255, blue: 61 / 255, alpha: 1)
         web.scrollView.bounces = false
         web.scrollView.contentInsetAdjustmentBehavior = .never
-        if #available(iOS 16.4, *) { web.isInspectable = true }   // débogage depuis Safari sur Mac
+        #if DEBUG
+        if #available(iOS 16.4, *) { web.isInspectable = true }   // débogage depuis Safari sur Mac (version de développement seulement)
+        #endif
         view = web
         speech.delegate = self
     }
@@ -73,7 +75,7 @@ final class GameViewController: UIViewController, WKUIDelegate, WKScriptMessageH
         stopSpeak: function () { post("stopSpeak"); },
         hasVoice: function () { return true; },
         takePhoto: function () { post("takePhoto"); },
-        nativeVersion: function () { return 2; },
+        nativeVersion: function () { return 3; },
         platform: function () { return "ios"; },
         hotUpdate: function (u, v) { post("hotUpdate", [u, v]); },
         openApp: function (u) { post("openApp", [u]); },
@@ -82,16 +84,29 @@ final class GameViewController: UIViewController, WKUIDelegate, WKScriptMessageH
     })();
     """
 
+    /// La page du jeu installée dans l'appli (file://) est de confiance ; une page servie par un autre téléphone (partie Wi-Fi) ne l'est pas.
+    private var trusted: Bool { web.url?.isFileURL == true }
+    private static let sensitive: Set<String> = ["startServer", "stopServer", "publish", "takePhoto", "postForm", "getBearer", "fetchImage", "hotUpdate", "openApp", "resetUpdate", "openUrl"]
+
+    /// Partie Wi-Fi : http vers une adresse IPv4 privée.
+    static func isLan(_ u: URL) -> Bool {
+        guard u.scheme == "http", let h = u.host else { return false }
+        let p = h.split(separator: ".").compactMap { Int($0) }
+        guard p.count == 4, p.allSatisfy({ (0...255).contains($0) }) else { return false }
+        return p[0] == 10 || (p[0] == 192 && p[1] == 168) || (p[0] == 172 && (16...31).contains(p[1]))
+    }
+
     /// Méthodes sans valeur de retour.
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any], let m = body["m"] as? String else { return }
         let a = body["a"] as? [Any] ?? []
+        if Self.sensitive.contains(m) && !trusted { return }
         func s(_ i: Int) -> String { i < a.count ? "\(a[i])" : "" }
         func f(_ i: Int) -> Float { i < a.count ? Float("\(a[i])") ?? 1 : 1 }
         switch m {
         case "publish": server?.publish(pid: s(0), json: s(1))
         case "stopServer": server?.stop(); server = nil
-        case "openUrl": if let u = URL(string: s(0)) { web.load(URLRequest(url: u)) }
+        case "openUrl": if let u = URL(string: s(0)), Self.isLan(u) { web.load(URLRequest(url: u)) }
         case "goHome": goHome()
         case "vibrate": vibrate(s(0))
         case "openExternal": if s(0).hasPrefix("https://"), let u = URL(string: s(0)) { UIApplication.shared.open(u) }
@@ -121,6 +136,7 @@ final class GameViewController: UIViewController, WKUIDelegate, WKScriptMessageH
             present(al, animated: true); return
         }
         let m = String(prompt.dropFirst("EBHost:".count))
+        if Self.sensitive.contains(m) && !trusted { completionHandler(""); return }
         let a = (try? JSONSerialization.jsonObject(with: Data((defaultText ?? "[]").utf8))) as? [String] ?? []
         func s(_ i: Int) -> String { i < a.count ? a[i] : "" }
         switch m {
@@ -149,10 +165,10 @@ final class GameViewController: UIViewController, WKUIDelegate, WKScriptMessageH
 
     // liens externes (site CYBERLOGIC…) : ouverts dans Safari
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        if let u = action.request.url, u.scheme == "https", action.navigationType == .linkActivated {
-            UIApplication.shared.open(u); decisionHandler(.cancel); return
-        }
-        decisionHandler(.allow)
+        guard let u = action.request.url else { decisionHandler(.cancel); return }
+        if u.isFileURL || Self.isLan(u) || u.absoluteString == "about:blank" { decisionHandler(.allow); return }
+        if u.scheme == "https" && action.navigationType == .linkActivated { UIApplication.shared.open(u) }
+        decisionHandler(.cancel)                                    // tout le reste est bloqué
     }
 
     // MARK: - Partie Wi-Fi (ce téléphone devient l'hôte)

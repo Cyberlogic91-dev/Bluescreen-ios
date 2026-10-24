@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob: https://cdn.discordapp.com; media-src 'self' file: data: blob:; font-src 'self' data:; connect-src 'self' https://jeu.cyberlogic.fr https://discord.com wss://broker.emqx.io:8084 wss://broker.hivemq.com:8884 wss://test.mosquitto.org:8081 ws://localhost:18883; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>BlueScreen</title>
 <meta name="theme-color" content="#0A1B3D">
@@ -13,7 +14,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-<script>window.EB_STANDALONE = 1;</script>
+<script>if (location.protocol === "http:" && location.hostname === "jeu.cyberlogic.fr") location.replace("https://" + location.host + location.pathname + location.search + location.hash);
+window.EB_STANDALONE = 1;</script>
 <style>
 /* Layout : table de jeu verticale — adversaires en haut, PC au centre, main en bas. Une seule ambiance sombre. */
 :root{
@@ -753,8 +755,8 @@ table.score tr.win td{color:var(--gold);font-weight:800}
 
 /* ---- mode en ligne ---- */
 .online-menu .tile{width:min(100%,360px);margin:6px 0}
-.roomcode{font:800 44px/1.1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.12em;color:#fff;background:linear-gradient(180deg,#0d3fb8,#0a2a7a);border:1px solid #2f6bff;border-radius:16px;padding:14px 22px;margin:8px auto 6px;text-align:center;box-shadow:0 0 0 4px rgba(47,107,255,.15),0 10px 30px rgba(0,0,0,.35);user-select:all}
-.roomcode.sm{font-size:26px;padding:8px 16px}
+.roomcode{font:800 34px/1.1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.12em;color:#fff;background:linear-gradient(180deg,#0d3fb8,#0a2a7a);border:1px solid #2f6bff;border-radius:16px;padding:14px 22px;margin:8px auto 6px;text-align:center;box-shadow:0 0 0 4px rgba(47,107,255,.15),0 10px 30px rgba(0,0,0,.35);user-select:all}
+.roomcode.sm{font-size:21px;padding:8px 16px}
 .qr.small{opacity:.9;margin-top:6px}
 .codein{font:700 24px ui-monospace,Menlo,Consolas,monospace!important;letter-spacing:.2em;text-align:center;text-transform:uppercase}
 .linkbtn.kick{font-size:12px;color:#ff8a8a;padding:0 4px;min-height:0}
@@ -913,6 +915,9 @@ function riskColor(w){const v=w/10;return v<=3?"#16A34A":v<=6?"#CA8A04":v<=8?"#E
 
 
 
+
+
+
 /* ---------- icônes ---------- */
 const ICON={
  "SOURIS":'<svg viewBox="0 0 40 50"><rect x="8" y="10" width="24" height="36" rx="12" fill="#E5E7EB" stroke="#1F2937" stroke-width="2"/><line x1="20" y1="10" x2="20" y2="25" stroke="#1F2937" stroke-width="2"/><line x1="8" y1="25" x2="32" y2="25" stroke="#1F2937" stroke-width="2"/><rect x="18" y="14" width="4" height="7" rx="2" fill="currentColor"/><path d="M20 10 C20 3 28 6 29 1" fill="none" stroke="#1F2937" stroke-width="2"/></svg>',
@@ -943,7 +948,7 @@ const MODE = window.EB_STANDALONE ? "app" : (location.protocol.indexOf("http") =
 const BRIDGE = (typeof window.EBHost !== "undefined") ? window.EBHost : null;
 const CAN_HOST = MODE === "app" && !!BRIDGE;
 const MAXP = 6;
-const APP_VERSION = "4.1";
+const APP_VERSION = "4.2";
 const APP_DATE = "2026-10-24";   // remplacée par la date de construction (build_page.py)
 function appDateFr() {
   const d = new Date(APP_DATE + "T12:00:00");
@@ -1817,8 +1822,12 @@ const EBAuth = (() => {
 })();
 window.EBAuth = EBAuth;
 
+// seuls les avatars-images (photo encodée ou avatar Discord) sont affichés : rien qui puisse injecter du code
+const AVATAR_RE = /^(data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+|https:\/\/cdn\.discordapp\.com\/(avatars|embed\/avatars)\/[0-9A-Za-z\/_.-]+\.png(\?size=[0-9]{1,4})?)$/;
+function safeAv(av) { return typeof av === "string" && av.length < 400000 && AVATAR_RE.test(av) ? av : ""; }
 function avatarHTML(av, name, size) {
-  const s = size || 28;
+  const s = Math.max(8, Math.min(240, +size || 28));
+  av = safeAv(av);
   if (av) return `<img class="av" src="${av}" alt="" width="${s}" height="${s}" style="width:${s}px;height:${s}px">`;
   const init = (name || "?").trim().charAt(0).toUpperCase();
   return `<span class="av ini" style="width:${s}px;height:${s}px;font-size:${Math.round(s * 0.5)}px" aria-hidden="true">${esc(init)}</span>`;
@@ -3251,37 +3260,72 @@ function MqttLink(url, clientId, onMsg, onState) {
   };
 }
 
-/* ---------- chiffrement et sujets ---------- */
+/* ---------- chiffrement ----------
+   - Code de salle de 10 caractères (≈50 bits) ; sujet MQTT et clé de salle dérivés par PBKDF2 (100 000 tours) :
+     retrouver le code à partir du sujet visible sur le relais demanderait des siècles de calcul.
+   - La clé de salle ne sert qu'à se présenter (join / hello). Ensuite chaque invité a SA clé, obtenue par
+     échange ECDH P-256 avec l'hôte : un autre invité ne peut ni lire sa main ni jouer à sa place.
+   - L'identifiant d'un invité est l'empreinte de sa clé publique ; chaque message porte un horodatage
+     strictement croissant (anti-rejeu). Aucun message en clair n'est accepté. */
 const OnlineCrypto = {
   ok: !!(window.crypto && crypto.subtle && window.TextEncoder),
+  enc: typeof TextEncoder !== "undefined" ? new TextEncoder() : null,
+  async kdf(code, label, bits) {
+    const base = await crypto.subtle.importKey("raw", this.enc.encode(code), "PBKDF2", false, ["deriveBits"]);
+    return new Uint8Array(await crypto.subtle.deriveBits({name: "PBKDF2", salt: this.enc.encode("BlueScreen·CYBERLOGIC·" + label), iterations: 100000, hash: "SHA-256"}, base, bits));
+  },
   async room(code) {
+    if (!this.ok) throw new Error("Cet appareil est trop ancien pour le mode en ligne (chiffrement indisponible).");
     code = code.toUpperCase();
-    const enc = new TextEncoder();
-    const topic = "cyberlogic/bs1/" + fnv("bluescreen-topic:" + code) + fnv(code + ":salle");   // même calcul sur tous les appareils
-    if (!this.ok) return {topic, key: null};
-    const base = await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveKey"]);
-    const key = await crypto.subtle.deriveKey({name: "PBKDF2", salt: enc.encode("BlueScreen·CYBERLOGIC"), iterations: 20000, hash: "SHA-256"}, base, {name: "AES-GCM", length: 256}, false, ["encrypt", "decrypt"]);
-    return {topic, key};
+    const [t, k] = await Promise.all([this.kdf(code, "sujet", 128), this.kdf(code, "cle", 256)]);
+    return {topic: "cyberlogic/bs2/" + hex(t), key: await this.aes(k)};
   },
-  async seal(room, obj, plain) {
-    const txt = JSON.stringify(obj);
-    if (!room.key || plain) return JSON.stringify({e: 0, d: txt});
+  aes(raw) { return crypto.subtle.importKey("raw", raw, {name: "AES-GCM"}, false, ["encrypt", "decrypt"]); },
+  async seal(key, obj) {
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ct = new Uint8Array(await crypto.subtle.encrypt({name: "AES-GCM", iv}, room.key, new TextEncoder().encode(txt)));
-    return JSON.stringify({e: 1, iv: b64(iv), d: b64(ct)});
+    const ct = new Uint8Array(await crypto.subtle.encrypt({name: "AES-GCM", iv}, key, this.enc.encode(JSON.stringify(obj))));
+    return {e: 1, iv: b64(iv), d: b64(ct)};
   },
-  async open(room, raw) {
-    const m = JSON.parse(raw);
-    if (m.e === 0) return JSON.parse(m.d);   // appareil sans chiffrement natif (rare) : accepté pour ne bloquer personne
-    if (!room.key) return null;
-    const pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: unb64(m.iv)}, room.key, unb64(m.d));
+  async open(key, m) {
+    if (!key || !m || m.e !== 1 || typeof m.iv !== "string" || typeof m.d !== "string") return null;
+    const pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: unb64(m.iv)}, key, unb64(m.d));
     return JSON.parse(new TextDecoder().decode(pt));
+  },
+  // ---- ECDH ----
+  async newPair() { return crypto.subtle.generateKey({name: "ECDH", namedCurve: "P-256"}, true, ["deriveBits"]); },
+  async pubB64(pair) { return b64(new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey))); },
+  async importPub(b) {
+    if (typeof b !== "string" || b.length < 80 || b.length > 100) throw new Error("clé");
+    return crypto.subtle.importKey("raw", unb64(b), {name: "ECDH", namedCurve: "P-256"}, false, []);
+  },
+  async shared(privateKey, pubB, info) {
+    const bits = new Uint8Array(await crypto.subtle.deriveBits({name: "ECDH", public: await this.importPub(pubB)}, privateKey, 256));
+    const inf = this.enc.encode("BlueScreen-ECDH:" + info), all = new Uint8Array(bits.length + inf.length); all.set(bits); all.set(inf, bits.length);
+    return this.aes(new Uint8Array(await crypto.subtle.digest("SHA-256", all)));
+  },
+  async cidOf(pubB) { return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", unb64(pubB)))).slice(0, 16); },
+  // la clé d'un invité est gardée (par salle) pour pouvoir revenir après un rechargement
+  async savedPair(code) {
+    try {
+      const j = JSON.parse(store.get("eb_okey_" + code, "null"));
+      if (j && j.d) {
+        const priv = await crypto.subtle.importKey("jwk", j, {name: "ECDH", namedCurve: "P-256"}, true, ["deriveBits"]);
+        const pub = await crypto.subtle.importKey("jwk", {kty: j.kty, crv: j.crv, x: j.x, y: j.y, ext: true}, {name: "ECDH", namedCurve: "P-256"}, true, []);
+        return {privateKey: priv, publicKey: pub};
+      }
+    } catch (e) {}
+    const p = await this.newPair();
+    try { store.set("eb_okey_" + code, JSON.stringify(await crypto.subtle.exportKey("jwk", p.privateKey))); } catch (e) {}
+    return p;
   }
 };
 function b64(u8) { let s = ""; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode.apply(null, u8.subarray(i, i + 8192)); return btoa(s); }
 function unb64(s) { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+function hex(u8) { return Array.from(u8, b => b.toString(16).padStart(2, "0")).join(""); }
 function fnv(s) { let h1 = 0x811c9dc5, h2 = 0x1b873593; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 16777619); h2 = Math.imul(h2 ^ c, 2246822519); } return ((h1 >>> 0).toString(16).padStart(8, "0") + (h2 >>> 0).toString(16).padStart(8, "0")); }
-function randHex(n) { const a = new Uint8Array(n); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => a[i] = Math.random() * 256 | 0); return Array.from(a, b => b.toString(16).padStart(2, "0")).join(""); }
+function randHex(n) { return hex(crypto.getRandomValues(new Uint8Array(n))); }
+const AV_OK = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/;
+const MAX_MSG = 200000, MAX_GUESTS = 24, MAX_SPECT = 10, CODE_LEN = 10;
 
 /* ---------- les avatars ne sont envoyés qu'une fois par invité ---------- */
 const AV_RE = /"(data:image\/[a-z]+;base64,[A-Za-z0-9+\/=]{300,})"/g;
@@ -3296,46 +3340,72 @@ const Online = {
   brokers() { const o = store.get("eb_mqtt", ""); return o ? [o] : ONLINE_BROKERS; },
   brokerOf(code) { const b = this.brokers(); return b[ROOM_ALPHA.indexOf(code.charAt(0)) % b.length]; },
   newCode(bi) {
-    const nb = this.brokers().length, rnd = new Uint8Array(6); crypto.getRandomValues(rnd);
-    let c = ""; for (let i = 0; i < 6; i++) c += ROOM_ALPHA[rnd[i] % 32];
+    const nb = this.brokers().length, rnd = crypto.getRandomValues(new Uint8Array(CODE_LEN));
+    let c = ""; for (let i = 0; i < CODE_LEN; i++) c += ROOM_ALPHA[rnd[i] % 32];
     let i0 = ROOM_ALPHA.indexOf(c[0]); while (i0 % nb !== bi) i0 = (i0 + 1) % 32;
     return ROOM_ALPHA[i0] + c.slice(1);
   },
+  validCode(c) { return typeof c === "string" && c.length === CODE_LEN && [...c].every(ch => ROOM_ALPHA.indexOf(ch) >= 0); },
   joinUrl(code) { return ONLINE_LINK + "#salle=" + code; },
-  pretty(code) { return code.slice(0, 3) + " " + code.slice(3); },
+  pretty(code) { return code.slice(0, 5) + " " + code.slice(5); },
 
   /* ----- hôte ----- */
   async host() {
     this.stop();
-    const list = this.brokers();
+    if (!OnlineCrypto.ok) throw new Error("Cet appareil est trop ancien pour le mode en ligne (chiffrement indisponible).");
+    const list = this.brokers(), pair = await OnlineCrypto.newPair(), hpub = await OnlineCrypto.pubB64(pair);
     for (let bi = 0; bi < list.length; bi++) {
       const code = this.newCode(bi), room = await OnlineCrypto.room(code);
       const link = MqttLink(list[bi], "bsh-" + randHex(6), (t, raw) => this.hostRx(raw), st => this.hostState(st));
       link.subscribe(room.topic + "/h");
       try { await link.connect(7000); } catch (e) { link.close(); continue; }
-      Object.assign(this, {hosting: true, guest: false, code, room, link, guests: {}});
+      Object.assign(this, {hosting: true, guest: false, code, room, link, guests: {}, pair, hpub});
       this.keepAwake(true);
       return code;
     }
     throw new Error("Aucun relais en ligne n'a répondu. Vérifie la connexion internet.");
   },
   hostState(st) {
-    if (st === "up" && this.hosting) { this.guests && Object.values(this.guests).forEach(g => g.sent.clear()); try { publishAll(); } catch (e) {} }
+    if (st === "up" && this.hosting) { Object.values(this.guests).forEach(g => g.sent.clear()); try { publishAll(); } catch (e) {} }
     if (LOBBY && LOBBY.online) { const el = $("#onState"); if (el) el.innerHTML = this.stateHTML(); }
   },
   stateHTML() { return this.link && this.link.up ? `<span class="conn">en ligne</span>` : `<span class="conn off">reconnexion…</span>`; },
+  spectCount() { return ((G && G.wifi ? G.spectators : LOBBY && LOBBY.spectators) || []).length; },
   async hostRx(raw) {
-    let m; try { m = await OnlineCrypto.open(this.room, raw); } catch (e) { return; }
-    if (!m || typeof m.cid !== "string" || !/^[0-9a-f]{16}$/.test(m.cid)) return;
-    const pid = "o" + m.cid;
-    const g = this.guests[m.cid] || (this.guests[m.cid] = {sent: new Set(), v: 0});
-    g.seen = Date.now(); g.plain = raw.indexOf('"e":0') >= 0 && raw.indexOf('"e":0') < 8;
-    if (m.t === "join") { g.sent.clear(); EBNet.onJoin(pid, JSON.stringify(m.body || {})); }
-    else if (m.t === "sync") { g.sent.clear(); try { publishAll(); } catch (e) {} if (!this.isKnown(pid)) this.toGuest(m.cid, {t: "unknown"}); }
-    else if (m.t === "act") { EBNet.onAction(pid, JSON.stringify(m.body || {})); }
-    else if (m.t === "ping") { this.toGuest(m.cid, {t: "pong"}); }
-    else if (m.t === "bye") { this.guestLeft(pid); delete this.guests[m.cid]; }
+    if (!this.hosting || typeof raw !== "string" || raw.length > MAX_MSG) return;
+    let env; try { env = JSON.parse(raw); } catch (e) { return; }
+    // 1) présentation d'un invité (clé de salle)
+    if (!env.c) {
+      let m; try { m = await OnlineCrypto.open(this.room.key, env); } catch (e) { return; }
+      if (!m || m.t !== "join" || typeof m.pub !== "string" || typeof m.ts !== "number") return;
+      let cid; try { cid = await OnlineCrypto.cidOf(m.pub); } catch (e) { return; }
+      let g = this.guests[cid];
+      if (g && m.ts <= g.ts) return;                           // rejeu
+      if (!g) {
+        if (Object.keys(this.guests).length >= MAX_GUESTS) return;
+        let key; try { key = await OnlineCrypto.shared(this.pair.privateKey, m.pub, cid); } catch (e) { return; }
+        g = this.guests[cid] = {key, ts: 0, sent: new Set(), v: 0};
+      }
+      g.ts = m.ts; g.seen = Date.now(); g.sent.clear();
+      const pid = "o" + cid, body = m.body && typeof m.body === "object" ? m.body : {};
+      this.hello(cid);
+      if (body.spectator && !this.isKnown(pid) && this.spectCount() >= MAX_SPECT) return netPublish(pid, JSON.stringify({phase: "refused", reason: "Trop de spectateurs dans cette salle."}));
+      EBNet.onJoin(pid, JSON.stringify({name: String(body.name || "").slice(0, 30), avatar: typeof body.avatar === "string" && body.avatar.length < 40000 && AV_OK.test(body.avatar) ? body.avatar : "", spectator: !!body.spectator}));
+      return;
+    }
+    // 2) messages d'un invité connu (sa clé à lui)
+    if (typeof env.c !== "string" || !/^[0-9a-f]{16}$/.test(env.c)) return;
+    const g = this.guests[env.c]; if (!g) return;
+    let m; try { m = await OnlineCrypto.open(g.key, env); } catch (e) { return; }
+    if (!m || typeof m.ts !== "number" || m.ts <= g.ts) return;   // rejeu
+    g.ts = m.ts; g.seen = Date.now();
+    const pid = "o" + env.c;
+    if (m.t === "sync") { g.sent.clear(); if (this.isKnown(pid)) { try { publishAll(); } catch (e) {} } else this.toGuest(env.c, {t: "unknown"}); }
+    else if (m.t === "act") { const b = m.body || {}; EBNet.onAction(pid, JSON.stringify({type: String(b.type || "").slice(0, 20), value: b.value, token: b.token})); }
+    else if (m.t === "ping") { this.toGuest(env.c, {t: "pong"}); }
+    else if (m.t === "bye") { this.guestLeft(pid); delete this.guests[env.c]; }
   },
+  async hello(cid) { try { this.link.publish(this.room.topic + "/c/" + cid, JSON.stringify(await OnlineCrypto.seal(this.room.key, {t: "hello", hpub: this.hpub}))); } catch (e) {} },
   isKnown(pid) {
     if (G && G.wifi) return G.players.some(p => p.pid === pid) || (G.spectators || []).indexOf(pid) >= 0;
     if (LOBBY) return LOBBY.seats.some(s => s.pid === pid) || (LOBBY.spectators || []).indexOf(pid) >= 0;
@@ -3353,64 +3423,89 @@ const Online = {
       if (p && p.kind === "remote") { p.kind = "bot"; p.name = p.name.slice(0, 11) + " 🤖"; G.log = `${p.name.replace(" 🤖", "")} a quitté : un robot prend sa place.`; try { if (G.waiting && G.players[G.waiting.i] === p) resolveWaiting(botDecide(G.waiting.i, G.waiting.req)); } catch (e) {} refresh(); }
     }
   },
-  async toGuest(cid, obj) { if (!this.link) return; const g = this.guests[cid]; try { this.link.publish(this.room.topic + "/c/" + cid, await OnlineCrypto.seal(this.room, obj, g && g.plain)); } catch (e) {} },
+  async toGuest(cid, obj) {
+    const g = this.guests[cid]; if (!this.link || !g) return;
+    try { const env = await OnlineCrypto.seal(g.key, obj); if (this.link) this.link.publish(this.room.topic + "/c/" + cid, JSON.stringify(env)); } catch (e) {}
+  },
   publish(pid, json) {
-    const cid = pid.slice(1), g = this.guests[cid] || (this.guests[cid] = {sent: new Set(), v: 0});
+    const cid = pid.slice(1), g = this.guests[cid]; if (!g) return;
     const pk = packAvatars(json, g.sent);
     g.v++;
     this.toGuest(cid, {t: "view", v: g.v, view: pk.view, avs: pk.avs});
   },
   stopHost() {
     if (!this.hosting) return;
-    const link = this.link, room = this.room;
-    Object.keys(this.guests).forEach(cid => OnlineCrypto.seal(room, {t: "closed"}).then(s => link.publish(room.topic + "/c/" + cid, s)).catch(() => {}));
+    const link = this.link, room = this.room, guests = this.guests;
+    Object.keys(guests).forEach(cid => OnlineCrypto.seal(guests[cid].key, {t: "closed"}).then(env => link.publish(room.topic + "/c/" + cid, JSON.stringify(env))).catch(() => {}));
     setTimeout(() => link.close(), 600);
-    this.hosting = false; this.link = null; this.guests = {}; this.keepAwake(false);
+    this.hosting = false; this.link = null; this.guests = {}; this.pair = null; this.keepAwake(false);
   },
 
   /* ----- invité ----- */
   async join(code, body) {
     this.stop();
     code = code.toUpperCase();
+    if (!this.validCode(code)) throw new Error("code");
     const room = await OnlineCrypto.room(code);
-    const cid = store.get("eb_ocid_" + code, "") || randHex(8);
-    store.set("eb_ocid_" + code, cid);
+    const pair = await OnlineCrypto.savedPair(code), pub = await OnlineCrypto.pubB64(pair), cid = await OnlineCrypto.cidOf(pub);
     const link = MqttLink(this.brokerOf(code), "bsg-" + randHex(6), (t, raw) => this.guestRx(raw), st => this.guestState(st));
     link.subscribe(room.topic + "/c/" + cid);
     await link.connect(8000);
-    Object.assign(this, {guest: true, hosting: false, code, room, link, cid, avs: {}, lastRx: Date.now(), body});
+    Object.assign(this, {guest: true, hosting: false, code, room, link, cid, pair, pub, gkey: null, gkeyOk: false, cands: [], avs: {}, lastRx: Date.now(), body, ts: 0});
     C.net = "online"; C.pid = "o" + cid; C.ver = 0; C.view = null; C.conn = true; C.spect = !!body.spectator;
-    this.plain = false;
-    this.toHost({t: "join", body});
-    setTimeout(() => { if (this.guest && !C.view && OnlineCrypto.ok) { this.plain = true; this.toHost({t: "join", body}); } }, 3500);   // hôte sans chiffrement natif
+    this.sendJoin();
     clearInterval(this.hb);
     this.hb = setInterval(() => {                       // l'hôte répond-il toujours ?
       if (!this.guest) return;
-      this.toHost({t: "ping"});
+      if (this.gkeyOk) this.toHost({t: "ping"}); else this.sendJoin();
       const off = Date.now() - this.lastRx > 40000;
       if (off === C.conn) { C.conn = !off; clientRender(); }
     }, 15000);
     this.keepAwake(true);
     clientRender();
-    setTimeout(() => { if (this.guest && !C.view) { C.view = {phase: "refused", reason: "Aucune salle ne répond à ce code. Vérifie-le auprès de l'hôte (la salle se ferme si son téléphone quitte le jeu)."}; clientRender(); } }, 12000);
+    setTimeout(() => { if (this.guest && !C.view) { C.view = {phase: "refused", reason: "Aucune salle ne répond à ce code. Vérifie-le auprès de l'hôte (la salle se ferme si son téléphone quitte le jeu)."}; clientRender(); } }, 14000);
   },
-  async toHost(obj) { if (!this.link) return; obj.cid = this.cid; try { this.link.publish(this.room.topic + "/h", await OnlineCrypto.seal(this.room, obj, this.plain)); } catch (e) {} },
-  guestState(st) { if (st === "up" && this.guest) { this.avs = {}; this.toHost({t: "join", body: this.body}); } if (st === "down" && this.guest && C.conn) { C.conn = false; clientRender(); } },
+  nextTs() { this.ts = Math.max(Date.now(), this.ts + 1); return this.ts; },
+  async sendJoin() {
+    if (!this.link) return;
+    try { this.link.publish(this.room.topic + "/h", JSON.stringify(await OnlineCrypto.seal(this.room.key, {t: "join", pub: this.pub, ts: this.nextTs(), body: this.body}))); } catch (e) {}
+  },
+  async toHost(obj) {
+    if (!this.link || !this.gkey) return;
+    obj.ts = this.nextTs();
+    try { const env = await OnlineCrypto.seal(this.gkey, obj); env.c = this.cid; this.link.publish(this.room.topic + "/h", JSON.stringify(env)); } catch (e) {}
+  },
+  guestState(st) { if (st === "up" && this.guest) { this.avs = {}; this.sendJoin(); } if (st === "down" && this.guest && C.conn) { C.conn = false; clientRender(); } },
   async guestRx(raw) {
-    let m; try { m = await OnlineCrypto.open(this.room, raw); } catch (e) { return; }
-    if (!m || !this.guest) return;
-    if (this.plain && raw.indexOf('"e":1') >= 0 && raw.indexOf('"e":1') < 8) this.plain = false;
+    if (!this.guest || typeof raw !== "string" || raw.length > MAX_MSG * 2) return;
+    let env; try { env = JSON.parse(raw); } catch (e) { return; }
+    let m = null;
+    // clé établie, puis clés candidates (une par « hello » reçu), puis clé de salle (hello)
+    for (const k of [this.gkey, ...this.cands]) {
+      if (!k) continue;
+      try { m = await OnlineCrypto.open(k, env); } catch (e) { m = null; }
+      if (m) { this.gkey = k; this.gkeyOk = true; this.cands = []; break; }
+    }
+    if (!m) {
+      let h; try { h = await OnlineCrypto.open(this.room.key, env); } catch (e) { return; }
+      if (!h || h.t !== "hello" || typeof h.hpub !== "string") return;
+      if (this.gkeyOk || this.cands.length > 4) return;          // clé déjà confirmée : les « hello » suivants sont ignorés
+      try { const k = await OnlineCrypto.shared(this.pair.privateKey, h.hpub, this.cid); this.cands.push(k); if (!this.gkey) this.gkey = k; } catch (e) {}
+      return;
+    }
     this.lastRx = Date.now();
     if (!C.conn) { C.conn = true; if (C.view) clientRender(); }
     if (m.t === "view") {
-      Object.assign(this.avs, m.avs || {});
+      if (typeof m.v !== "number" || m.v <= C.ver) return;   // ancienne vue rejouée
+      if (m.avs && typeof m.avs === "object") Object.keys(m.avs).forEach(k => { const d = m.avs[k]; if (/^[a-z0-9]{1,40}$/.test(k) && typeof d === "string" && d.length < 60000 && AV_OK.test(d)) this.avs[k] = d; });
       let missing = false;
       const txt = String(m.view || "null").replace(/"@av:([a-z0-9]+)"/g, (x, k) => this.avs[k] ? `"${this.avs[k]}"` : (missing = true, "null"));
       if (missing) this.toHost({t: "sync"});
-      try { C.view = JSON.parse(txt); C.ver = m.v; } catch (e) { return; }
+      let v; try { v = JSON.parse(txt); } catch (e) { return; }
+      C.view = sanitizeView(v); C.ver = m.v;
       clientRender();
     } else if (m.t === "closed" || m.t === "unknown") {
-      if (m.t === "unknown" && C.view && C.view.phase !== "refused") return this.toHost({t: "join", body: this.body});
+      if (m.t === "unknown" && C.view && C.view.phase !== "refused") return this.sendJoin();
       this.stop(); C.view = {phase: "refused", reason: "L'hôte a fermé la salle."}; C.net = "online"; clientRender();
     }
   },
@@ -3482,32 +3577,32 @@ function renderOnlineJoin(code, msg) {
   const prof = Profile.get();
   $("#app").innerHTML = `<div class="screen-pad"><h2>Rejoindre une salle</h2>
     <div class="avatar-big">${avatarHTML(prof.avatar, store.get("eb_name", "") || "?", 72)}</div>
-    <div class="field"><label for="iCode">Code de la salle</label><input id="iCode" class="codein" maxlength="7" value="${esc(code ? Online.pretty(code) : "")}" placeholder="ABC 123" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
+    <div class="field"><label for="iCode">Code de la salle</label><input id="iCode" class="codein" maxlength="11" value="${esc(code ? Online.pretty(code) : "")}" placeholder="ABCDE 12345" autocomplete="off" autocapitalize="characters" spellcheck="false"></div>
     <div class="field"><label for="iName">Ton prénom</label><input id="iName" maxlength="14" value="${esc(store.get("eb_name", ""))}" placeholder="Ton prénom" autocomplete="off"></div>
     <button class="btn" id="bJoin">Rejoindre la table</button>
     <button class="btn ghost" id="bSpect">Regarder la partie</button>
     <div class="err" id="err">${esc(msg || "")}</div>${back()}</div>`;
   $("#bBack").onclick = () => { history.replaceState(null, "", location.pathname + location.search); renderOnlineMenu(); };
   const ic = $("#iCode");
-  ic.oninput = () => { const v = [...ic.value.toUpperCase()].filter(ch => ROOM_ALPHA.indexOf(ch) >= 0).join("").slice(0, 6); ic.value = v.length > 3 ? v.slice(0, 3) + " " + v.slice(3) : v; };
+  ic.oninput = () => { const v = [...ic.value.toUpperCase()].filter(ch => ROOM_ALPHA.indexOf(ch) >= 0).join("").slice(0, CODE_LEN); ic.value = v.length > 5 ? v.slice(0, 5) + " " + v.slice(5) : v; };
   const go = async spect => {
     FX.unlock();
     const c = ic.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (c.length !== 6 || [...c].some(ch => ROOM_ALPHA.indexOf(ch) < 0)) { $("#err").textContent = "Le code fait 6 caractères, par exemple K7P 2QX."; return; }
+    if (!Online.validCode(c)) { $("#err").textContent = "Le code fait 10 caractères, par exemple K7P2Q XM4RA."; return; }
     const name = cleanName($("#iName").value);
     if (!spect && !name) { $("#err").textContent = "Indique ton prénom pour que les autres te reconnaissent."; return; }
     if (name) store.set("eb_name", name);
     $("#bJoin").disabled = $("#bSpect").disabled = true; $("#err").textContent = "Connexion…";
     const av = Profile.get().avatar || "";
     try { await Online.join(c, spect ? {name: "Spectateur", spectator: true} : {name, avatar: av.length < 40000 ? av : ""}); }
-    catch (e) { $("#bJoin").disabled = $("#bSpect").disabled = false; $("#err").textContent = "Connexion impossible. Vérifie ta connexion internet et réessaie."; }
+    catch (e) { $("#bJoin").disabled = $("#bSpect").disabled = false; $("#err").textContent = /ancien/.test(e.message || "") ? e.message : "Connexion impossible. Vérifie ta connexion internet et réessaie."; }
   };
   $("#bJoin").onclick = () => go(false);
   $("#bSpect").onclick = () => go(true);
 }
 // lien d'invitation : jeu.cyberlogic.fr/#salle=CODE
 function onlineDeepLink() {
-  const m = /[#&]salle=([A-Za-z0-9]{6})/.exec(location.hash || "");
+  const m = /[#&]salle=([A-Za-z0-9]{10})(?![A-Za-z0-9])/.exec(location.hash || "");
   if (!m || MODE !== "app") return false;
   renderOnlineJoin(m[1].toUpperCase());
   return true;
@@ -3524,24 +3619,52 @@ window.addEventListener("hashchange", () => { if (!G && !Online.guest && !Online
 const Update = (() => {
   const BASE = "https://jeu.cyberlogic.fr/";
   const CHANGES = [
-  {"version": "4.1", "build": 35, "minNative": 2, "notes": [
-    "Mises à jour automatiques : le jeu vérifie tout seul s'il existe une nouvelle version.",
-    "Mise à jour rapide en un clic dans l'appli, sans tout réinstaller.",
-    "Écran « Nouveautés » après chaque mise à jour.",
-    "Bouton « Rechercher une mise à jour » dans À propos."
-  ]},
-  {"version": "4.0", "build": 34, "notes": [
-    "Nouveau : mode en ligne ! Crée une salle, envoie le code et joue avec tes amis à distance.",
-    "Tes amis peuvent rejoindre depuis l'appli ou directement sur jeu.cyberlogic.fr.",
-    "Un iPhone peut aussi créer une salle."
-  ]},
-  {"version": "3.9", "build": 33, "notes": [
-    "Le jeu a son adresse : jeu.cyberlogic.fr.",
-    "Bouton « Inviter un ami à jouer » dans À propos."
-  ]},
-  {"version": "3.8", "build": 32, "notes": [
-    "Installation proposée automatiquement sur iPhone et Android."
-  ]}
+ {
+  "version": "4.2",
+  "build": 36,
+  "minNative": 3,
+  "notes": [
+   "Sécurité renforcée du mode en ligne : chaque joueur a sa propre clé secrète, personne ne peut voir ta main.",
+   "Codes de salle plus longs (10 caractères) et chiffrement plus solide.",
+   "Les mises à jour de l'appli sont désormais signées par CYBERLOGIC et vérifiées avant installation.",
+   "Protection contre les contenus malveillants envoyés par d'autres joueurs."
+  ]
+ },
+ {
+  "version": "4.1",
+  "build": 35,
+  "minNative": 2,
+  "notes": [
+   "Mises à jour automatiques : le jeu vérifie tout seul s'il existe une nouvelle version.",
+   "Mise à jour rapide en un clic dans l'appli, sans tout réinstaller.",
+   "Écran « Nouveautés » après chaque mise à jour.",
+   "Bouton « Rechercher une mise à jour » dans À propos."
+  ]
+ },
+ {
+  "version": "4.0",
+  "build": 34,
+  "notes": [
+   "Nouveau : mode en ligne ! Crée une salle, envoie le code et joue avec tes amis à distance.",
+   "Tes amis peuvent rejoindre depuis l'appli ou directement sur jeu.cyberlogic.fr.",
+   "Un iPhone peut aussi créer une salle."
+  ]
+ },
+ {
+  "version": "3.9",
+  "build": 33,
+  "notes": [
+   "Le jeu a son adresse : jeu.cyberlogic.fr.",
+   "Bouton « Inviter un ami à jouer » dans À propos."
+  ]
+ },
+ {
+  "version": "3.8",
+  "build": 32,
+  "notes": [
+   "Installation proposée automatiquement sur iPhone et Android."
+  ]
+ }
 ];
   const native = BRIDGE ? (BRIDGE.nativeVersion ? +BRIDGE.nativeVersion() || 1 : 1) : 0;
   const isIOSApp = !!BRIDGE && ((BRIDGE.platform && BRIDGE.platform() === "ios") || /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent));
@@ -4749,7 +4872,7 @@ function chatColor(name) { let h = 0; for (const ch of String(name)) h = (h * 31
 function chatAvatar(V, seat) {
   if (seat == null) return `<span class="dav sys">${BRAND.mark}</span>`;
   const p = V.players[seat]; if (!p) return `<span class="dav sys">${BRAND.mark}</span>`;
-  if (p.avatar) return `<span class="dav"><img src="${p.avatar}" alt=""></span>`;
+  if (safeAv(p.avatar)) return `<span class="dav"><img src="${safeAv(p.avatar)}" alt=""></span>`;
   if (p.kind !== "bot") return `<span class="dav ini" style="background:${chatColor(p.name)}">${esc((p.name || "?").charAt(0).toUpperCase())}</span>`;
   let sid = "bot_" + p.name;
   try { if (V.story != null) { const L = STORY.levels[V.story]; if (L && L.bots[0] && L.bots[0].name === p.name) sid = charOf(L); } } catch (e) {}
@@ -5098,6 +5221,25 @@ function renderJoinApp() {
 }
 
 /* ============================== CLIENT (téléphone invité) ============================== */
+// Une vue arrive d'un autre téléphone : on ne lui fait pas confiance. Aucun texte ne peut contenir de balise
+// ni sortir d'un attribut, les avatars doivent être de vraies images, les nombres restent raisonnables.
+function sanitizeView(v, depth, key) {
+  depth = depth || 0;
+  if (depth > 10) return null;
+  if (typeof v === "string") {
+    if (key === "avatar") return safeAv(v) || null;
+    return v.slice(0, 4000).replace(/[<>"'`]/g, c => ({"<": "‹", ">": "›", '"': "”", "'": "’", "`": "ʼ"})[c]);
+  }
+  if (typeof v === "number") { if (!isFinite(v)) return 0; if (key === "n") return Math.max(0, Math.min(60, Math.floor(v))); return Math.max(-1e15, Math.min(1e15, v)); }
+  if (typeof v === "boolean" || v === null) return v;
+  if (Array.isArray(v)) return v.slice(0, 300).map(x => sanitizeView(x, depth + 1, key === "avatar" ? null : key));
+  if (typeof v === "object") {
+    const o = {};
+    Object.keys(v).slice(0, 200).forEach(k => { if (k === "__proto__" || k === "constructor" || k === "prototype") return; o[k.replace(/[^\w-]/g, "").slice(0, 40)] = sanitizeView(v[k], depth + 1, k); });
+    return o;
+  }
+  return null;
+}
 const C = {pid: null, ver: 0, view: null, conn: true, polling: false, net: MODE === "client" ? "wifi" : null};
 function clientBoot() {
   C.pid = store.get("eb_pid_" + location.host, null);
@@ -5145,7 +5287,7 @@ async function clientPoll() {
       const j = await r.json();
       if (!C.conn) { C.conn = true; clientRender(); }
       if (j.unknown) { store.del("eb_pid_" + location.host); C.pid = null; C.polling = false; return clientJoinScreen("La partie a été fermée. Rejoins la nouvelle table."); }
-      if (j.v > C.ver) { C.ver = j.v; C.view = j.view ? JSON.parse(j.view) : null; clientRender(); }
+      if (j.v > C.ver) { C.ver = j.v; C.view = j.view ? sanitizeView(JSON.parse(j.view)) : null; clientRender(); }
     } catch (e) {
       if (C.conn) { C.conn = false; clientRender(); }
       await sleep(1500);

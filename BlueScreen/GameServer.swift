@@ -102,6 +102,7 @@ final class GameServer {
             let data = (try? Data(contentsOf: indexURL)) ?? Data()
             send(c, 200, "text/html; charset=utf-8", data)
         case ("POST", "/join"):
+            if views.count >= 40 { sendJSON(c, "{\"error\":\"table pleine\"}"); return }
             let pid = Self.newPid()
             views[pid] = .some(nil); versions[pid] = 0
             callJs("window.EBNet&&EBNet.onJoin(\(JS.quote(pid)),\(JS.quote(body)))")
@@ -111,6 +112,7 @@ final class GameServer {
             guard let cur = versions[pid] else { sendJSON(c, "{\"unknown\":true}"); return }
             if cur > v { answerPoll(c, pid: pid); return }
             // attente longue : réponse dès la prochaine vue, ou au bout de 20 s
+            if (waiting[pid]?.count ?? 0) >= 3 { c.cancel(); return }      // pas plus de 3 attentes par joueur
             waiting[pid, default: []].append((conn: c, v: v))
             q.asyncAfter(deadline: .now() + 20) { [weak self] in
                 guard let self = self, var list = self.waiting[pid], let i = list.firstIndex(where: { $0.conn === c }) else { return }

@@ -4,7 +4,7 @@ import Foundation
 enum Net {
     /// POST x-www-form-urlencoded ou GET avec jeton Bearer ; renvoie le corps JSON ou {"error": "..."}.
     static func request(method: String, url: String, body: String?, bearer: String?, completion: @escaping (String?) -> Void) {
-        guard let u = URL(string: url), u.scheme == "https" else { completion("{\"error\":\"adresse invalide\"}"); return }
+        guard url.hasPrefix("https://discord.com/api/"), let u = URL(string: url) else { completion("{\"error\":\"adresse refusée\"}"); return }
         var r = URLRequest(url: u, timeoutInterval: 15)
         r.httpMethod = method
         r.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -27,7 +27,7 @@ enum Net {
 
     /// Télécharge une image (avatar Discord) et la renvoie en data URL (300 Ko maximum).
     static func imageDataURL(_ url: String, completion: @escaping (String?) -> Void) {
-        guard let u = URL(string: url), u.scheme == "https" else { completion(""); return }
+        guard url.hasPrefix("https://cdn.discordapp.com/"), let u = URL(string: url) else { completion(""); return }
         URLSession.shared.dataTask(with: URLRequest(url: u, timeoutInterval: 15)) { data, resp, _ in
             var out = ""
             if let d = data, d.count <= 300 * 1024 {

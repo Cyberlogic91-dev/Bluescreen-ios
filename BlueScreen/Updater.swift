@@ -1,10 +1,31 @@
 import Foundation
+import CryptoKit
 
 /// Mise à jour rapide : la page du jeu est téléchargée depuis jeu.cyberlogic.fr et rangée dans
 /// Application Support/www (avec une copie des musiques et du logo). Elle est oubliée dès qu'une
 /// nouvelle version de l'appli est installée (via AltStore), qui contient une page au moins aussi récente.
 enum Updater {
     static let base = "https://jeu.cyberlogic.fr/"
+    static let pageURL = URL(string: base + "app/index.html")!, sigURL = URL(string: base + "app/index.sig")!
+    /// Clé publique CYBERLOGIC (ECDSA P-256, DER) : seule une page signée par la clé privée correspondante est acceptée.
+    static let publicKeyDER = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEBzWlAfCnMZbyXBwXdIwl7GIp47AmIWcjKDgQkWa7wgiVDK4tQV7K1aXJaeQigUjqxVlbDKVQVtbyrixx3Od1Yw=="
+
+    static func verify(_ data: Data, signatureB64: String) -> Bool {
+        guard let kd = Data(base64Encoded: publicKeyDER), let key = try? P256.Signing.PublicKey(derRepresentation: kd),
+              let sd = Data(base64Encoded: signatureB64.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let sig = try? P256.Signing.ECDSASignature(derRepresentation: sd) else { return false }
+        return key.isValidSignature(sig, for: data)
+    }
+
+    static func cmp(_ a: String, _ b: String) -> Int {
+        let x = a.split(separator: ".").map { Int($0) ?? 0 }, y = b.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(x.count, y.count) {
+            let p = i < x.count ? x[i] : 0, q = i < y.count ? y[i] : 0
+            if p != q { return p > q ? 1 : -1 }
+        }
+        return 0
+    }
+    private static var appVersion: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
     private static let d = UserDefaults.standard
 
     static var dir: URL {
@@ -27,17 +48,25 @@ enum Updater {
 
     static func hotUpdate(url: String, version: String, bundle: URL, done: @escaping (Bool, String) -> Void) {
         func finish(_ ok: Bool, _ msg: String) { DispatchQueue.main.async { done(ok, msg) } }
-        guard url.hasPrefix(base), var comps = URLComponents(string: url) else { return finish(false, "adresse refusée") }
         guard version.range(of: "^[0-9]+(\\.[0-9]+){0,3}$", options: .regularExpression) != nil else { return finish(false, "version invalide") }
-        comps.queryItems = [URLQueryItem(name: "t", value: String(Int(Date().timeIntervalSince1970)))]
-        var req = URLRequest(url: comps.url!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
-        req.setValue("BlueScreen-iOS", forHTTPHeaderField: "User-Agent")
-        URLSession.shared.dataTask(with: req) { data, resp, err in
-            if let e = err { return finish(false, e.localizedDescription) }
-            guard let http = resp as? HTTPURLResponse, http.statusCode == 200, http.url?.host == "jeu.cyberlogic.fr",
-                  let data = data, data.count > 100_000, data.count < 8_000_000,
-                  let html = String(data: data, encoding: .utf8),
-                  html.contains("const APP_VERSION = \"\(version)\""), html.contains("EBHost") else { return finish(false, "fichier inattendu") }
+        // jamais de retour en arrière : plus récente que l'appli ET que la mise à jour déjà installée
+        guard cmp(version, appVersion) > 0, cmp(version, d.string(forKey: "upd_ver") ?? "0") > 0 else { return finish(false, "version déjà installée") }
+        func fetch(_ u: URL, _ done: @escaping (Data?) -> Void) {
+            var c = URLComponents(url: u, resolvingAgainstBaseURL: false)!
+            c.queryItems = [URLQueryItem(name: "t", value: String(Int(Date().timeIntervalSince1970)))]
+            var req = URLRequest(url: c.url!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
+            req.setValue("BlueScreen-iOS", forHTTPHeaderField: "User-Agent")
+            URLSession.shared.dataTask(with: req) { data, resp, _ in
+                guard let http = resp as? HTTPURLResponse, http.statusCode == 200, http.url?.host == "jeu.cyberlogic.fr" else { return done(nil) }
+                done(data)
+            }.resume()
+        }
+        fetch(sigURL) { sigData in
+          guard let sigData = sigData, sigData.count < 4096, let sigB64 = String(data: sigData, encoding: .ascii) else { return finish(false, "signature introuvable") }
+          fetch(pageURL) { data in
+            guard let data = data, data.count > 100_000, data.count < 8_000_000 else { return finish(false, "téléchargement impossible") }
+            guard verify(data, signatureB64: sigB64) else { return finish(false, "signature CYBERLOGIC invalide") }
+            guard let html = String(data: data, encoding: .utf8), html.contains("const APP_VERSION = \"\(version)\""), html.contains("EBHost") else { return finish(false, "fichier inattendu") }
             do {
                 let fm = FileManager.default
                 try fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -52,6 +81,7 @@ enum Updater {
                 d.set(appBuild, forKey: "upd_build"); d.set(version, forKey: "upd_ver")
                 finish(true, "")
             } catch { finish(false, error.localizedDescription) }
-        }.resume()
+          }
+        }
     }
 }
