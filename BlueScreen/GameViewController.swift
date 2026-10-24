@@ -10,7 +10,9 @@ final class GameViewController: UIViewController, WKUIDelegate, WKScriptMessageH
     private var web: WKWebView!
     private var server: GameServer?
     private let speech = AVSpeechSynthesizer()
-    private lazy var wwwDir: URL = Bundle.main.url(forResource: "www", withExtension: nil)!
+    private lazy var bundleWww: URL = Bundle.main.url(forResource: "www", withExtension: nil)!
+    /// Dossier de jeu : la mise à jour rapide si elle correspond à cette appli, sinon le jeu livré avec l'appli.
+    private var wwwDir: URL { Updater.activeDir(bundle: bundleWww) }
     private var homeURL: URL { wwwDir.appendingPathComponent("index.html") }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
@@ -70,7 +72,12 @@ final class GameViewController: UIViewController, WKUIDelegate, WKScriptMessageH
         speak: function (t, p, r) { post("speak", [t, p, r]); },
         stopSpeak: function () { post("stopSpeak"); },
         hasVoice: function () { return true; },
-        takePhoto: function () { post("takePhoto"); }
+        takePhoto: function () { post("takePhoto"); },
+        nativeVersion: function () { return 2; },
+        platform: function () { return "ios"; },
+        hotUpdate: function (u, v) { post("hotUpdate", [u, v]); },
+        openApp: function (u) { post("openApp", [u]); },
+        resetUpdate: function () { post("resetUpdate"); }
       };
     })();
     """
@@ -92,6 +99,12 @@ final class GameViewController: UIViewController, WKUIDelegate, WKScriptMessageH
         case "speak": speak(s(0), pitch: f(1), rate: f(2))
         case "stopSpeak": speech.stopSpeaking(at: .immediate)
         case "takePhoto": takePhoto()
+        case "hotUpdate":
+            Updater.hotUpdate(url: s(0), version: s(1), bundle: bundleWww) { [weak self] ok, msg in
+                self?.callJs("window.Update&&Update._hot(\(ok),\(JS.quote(msg)))")
+            }
+        case "openApp": if s(0).hasPrefix("altstore://"), let u = URL(string: s(0)) { UIApplication.shared.open(u) }
+        case "resetUpdate": Updater.reset()
         default: break
         }
     }

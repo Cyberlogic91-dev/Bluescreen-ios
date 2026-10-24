@@ -758,6 +758,25 @@ table.score tr.win td{color:var(--gold);font-weight:800}
 .qr.small{opacity:.9;margin-top:6px}
 .codein{font:700 24px ui-monospace,Menlo,Consolas,monospace!important;letter-spacing:.2em;text-align:center;text-transform:uppercase}
 .linkbtn.kick{font-size:12px;color:#ff8a8a;padding:0 4px;min-height:0}
+
+/* ---- mises à jour ---- */
+.upd-ban{display:flex;align-items:center;gap:12px;width:100%;margin:8px 0 2px;padding:11px 14px;border-radius:14px;border:1px solid #2f6bff;background:linear-gradient(90deg,rgba(47,107,255,.22),rgba(47,107,255,.08));color:var(--ink,#fff);text-align:left;cursor:pointer;font:inherit}
+.upd-ban span:nth-child(2){flex:1;display:flex;flex-direction:column}
+.upd-ban small{color:var(--muted,#9fb3d9);font-size:12px}
+.upd-ban .upd-go{font-weight:800;font-size:13px;background:#2f6bff;color:#fff;border-radius:999px;padding:6px 12px}
+.upd-ban.ready{border-color:#f5c518;background:linear-gradient(90deg,rgba(245,197,24,.22),rgba(245,197,24,.06))}
+.upd-ban.ready .upd-go{background:#f5c518;color:#111}
+.upd-dot{width:10px;height:10px;border-radius:50%;background:#2f6bff;box-shadow:0 0 0 0 rgba(47,107,255,.7);animation:updPulse 1.6s infinite;flex:none}
+.upd-ban.ready .upd-dot{background:#f5c518}
+@keyframes updPulse{70%{box-shadow:0 0 0 9px rgba(47,107,255,0)}100%{box-shadow:0 0 0 0 rgba(47,107,255,0)}}
+.upd-notes{margin:6px 0 10px;padding-left:20px;text-align:left;line-height:1.45}
+.upd-notes li{margin:3px 0}
+.upd-v{margin:12px 0 2px;font-size:15px;color:#5FA0FF;text-align:left}
+.upd-how{margin:6px 0 12px;font-size:14px;color:var(--muted,#9fb3d9);text-align:left}
+.upd-bar{height:10px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden}
+.upd-bar i{display:block;height:100%;background:linear-gradient(90deg,#2f6bff,#5FA0FF);transition:width .3s}
+.upd-about{display:flex;flex-direction:column;align-items:stretch;gap:4px;margin:8px 0 4px}
+.upd-ok{color:#4ade80;text-align:center}
 </style>
 </head>
 <body>
@@ -891,6 +910,9 @@ function riskColor(w){const v=w/10;return v<=3?"#16A34A":v<=6?"#CA8A04":v<=8?"#E
 
 
 
+
+
+
 /* ---------- icônes ---------- */
 const ICON={
  "SOURIS":'<svg viewBox="0 0 40 50"><rect x="8" y="10" width="24" height="36" rx="12" fill="#E5E7EB" stroke="#1F2937" stroke-width="2"/><line x1="20" y1="10" x2="20" y2="25" stroke="#1F2937" stroke-width="2"/><line x1="8" y1="25" x2="32" y2="25" stroke="#1F2937" stroke-width="2"/><rect x="18" y="14" width="4" height="7" rx="2" fill="currentColor"/><path d="M20 10 C20 3 28 6 29 1" fill="none" stroke="#1F2937" stroke-width="2"/></svg>',
@@ -921,7 +943,7 @@ const MODE = window.EB_STANDALONE ? "app" : (location.protocol.indexOf("http") =
 const BRIDGE = (typeof window.EBHost !== "undefined") ? window.EBHost : null;
 const CAN_HOST = MODE === "app" && !!BRIDGE;
 const MAXP = 6;
-const APP_VERSION = "4.0";
+const APP_VERSION = "4.1";
 const APP_DATE = "2026-10-24";   // remplacée par la date de construction (build_page.py)
 function appDateFr() {
   const d = new Date(APP_DATE + "T12:00:00");
@@ -3492,6 +3514,179 @@ function onlineDeepLink() {
 }
 window.addEventListener("hashchange", () => { if (!G && !Online.guest && !Online.hosting) onlineDeepLink(); });
 
+/* ============================== MISES À JOUR ==============================
+   Le jeu lit https://jeu.cyberlogic.fr/version.json (publié avec chaque version) :
+   - version web : on recharge la page (le service worker sert la nouvelle) ;
+   - appli Android / iPhone récente : « mise à jour rapide », le nouveau jeu (≈1 Mo) est
+     téléchargé par l'appli et utilisé tout de suite, sans réinstaller ;
+   - si la nouvelle version demande une appli plus récente : APK (Android) ou AltStore (iPhone).
+*/
+const Update = (() => {
+  const BASE = "https://jeu.cyberlogic.fr/";
+  const CHANGES = [
+  {"version": "4.1", "build": 35, "minNative": 2, "notes": [
+    "Mises à jour automatiques : le jeu vérifie tout seul s'il existe une nouvelle version.",
+    "Mise à jour rapide en un clic dans l'appli, sans tout réinstaller.",
+    "Écran « Nouveautés » après chaque mise à jour.",
+    "Bouton « Rechercher une mise à jour » dans À propos."
+  ]},
+  {"version": "4.0", "build": 34, "notes": [
+    "Nouveau : mode en ligne ! Crée une salle, envoie le code et joue avec tes amis à distance.",
+    "Tes amis peuvent rejoindre depuis l'appli ou directement sur jeu.cyberlogic.fr.",
+    "Un iPhone peut aussi créer une salle."
+  ]},
+  {"version": "3.9", "build": 33, "notes": [
+    "Le jeu a son adresse : jeu.cyberlogic.fr.",
+    "Bouton « Inviter un ami à jouer » dans À propos."
+  ]},
+  {"version": "3.8", "build": 32, "notes": [
+    "Installation proposée automatiquement sur iPhone et Android."
+  ]}
+];
+  const native = BRIDGE ? (BRIDGE.nativeVersion ? +BRIDGE.nativeVersion() || 1 : 1) : 0;
+  const isIOSApp = !!BRIDGE && ((BRIDGE.platform && BRIDGE.platform() === "ios") || /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent));
+  const isWeb = !!window.EB_STANDALONE && !BRIDGE && (location.protocol === "https:" || location.hostname === "localhost");
+  const enabled = MODE === "app" && (isWeb || !!BRIDGE);
+  let info = null, state = "idle", pct = 0, busy = false;
+
+  function cmp(a, b) {
+    const x = String(a).split(".").map(n => parseInt(n, 10) || 0), y = String(b).split(".").map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0 ? 1 : -1; }
+    return 0;
+  }
+  const newer = () => info && cmp(info.version, APP_VERSION) > 0;
+  function plan() {
+    if (isWeb) return "reload";
+    if (native >= (info.minNative || 1) && BRIDGE.hotUpdate) return "hot";
+    if (isIOSApp) return "altstore";
+    return BRIDGE.installApk ? "apk" : "apk-browser";
+  }
+
+  async function check(manual) {
+    if (!enabled || busy) return null;
+    busy = true;
+    try {
+      const r = await fetch(BASE + "version.json?t=" + Date.now(), {cache: "no-store"});
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      info = await r.json();
+      store.set("eb_upd_last", String(Date.now()));
+      if (!newer()) { state = "uptodate"; if (manual) showToast(`Tu as la dernière version (${APP_VERSION})`, "good"); return info; }
+      if (state === "ready" && store.get("eb_upd_ready", "") === info.version) return info;
+      state = "available";
+      if (plan() === "hot" && !manual) download(true);   // téléchargée en arrière-plan, appliquée quand le joueur veut
+      else banner();
+      if (manual) details();
+      return info;
+    } catch (e) {
+      if (manual) showToast("Impossible de vérifier : pas de connexion internet ?", "warn");
+      return null;
+    } finally { busy = false; refreshAbout(); }
+  }
+
+  /* ----- mise à jour rapide (appli) ----- */
+  function download(silent) {
+    if (!info || state === "downloading") return;
+    state = "downloading"; pct = 0; refreshAbout();
+    try { BRIDGE.hotUpdate(info.page || BASE + "app/index.html", String(info.version)); }
+    catch (e) { state = "available"; if (!silent) showToast("Mise à jour impossible : " + e.message, "warn"); }
+    download.silent = silent;
+  }
+  function _hot(ok, msg) {
+    if (ok) { state = "ready"; store.set("eb_upd_ready", info ? info.version : ""); banner(); if (!download.silent) details(); }
+    else { state = "available"; if (!download.silent) showToast("Téléchargement interrompu" + (msg ? " : " + msg : ""), "warn"); else banner(); }
+    refreshAbout();
+  }
+  function apply() {
+    store.set("eb_upd_from", APP_VERSION);
+    if (G) { showToast("Termine ta partie, la mise à jour s'appliquera ensuite.", "info"); return; }
+    if (state === "ready" && BRIDGE) { BRIDGE.goHome(); return; }
+    if (isWeb) {
+      const go = () => location.replace(location.pathname + "?v=" + encodeURIComponent(info ? info.version : Date.now()));
+      if (navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(r => r ? r.update() : null).catch(() => {}).then(go); else go();
+    }
+  }
+
+  /* ----- APK complet (Android, quand l'appli elle-même doit changer) ----- */
+  function apk() {
+    const url = info.apk || BASE + "android/BlueScreen.apk";
+    if (BRIDGE.installApk) { state = "downloading"; pct = 0; refreshAbout(); details(); BRIDGE.installApk(url); }
+    else if (BRIDGE.openExternal) BRIDGE.openExternal(url);
+  }
+  function _apk(p, err) {
+    if (err) { state = "available"; showToast(err, "warn"); }
+    else { pct = p; if (p >= 100) state = "installing"; }
+    refreshAbout();
+    const el = $("#updPct"); if (el) el.style.width = pct + "%";
+    const lb = $("#updLbl"); if (lb) lb.textContent = state === "installing" ? "Android va te demander de confirmer l'installation." : `Téléchargement… ${pct} %`;
+  }
+
+  /* ----- interface ----- */
+  function notesHTML(list) { return `<ul class="upd-notes">${list.map(n => `<li>${esc(n)}</li>`).join("")}</ul>`; }
+  function details() {
+    if (!info) return;
+    const p = plan();
+    let txt = "", btns = [];
+    if (state === "ready") { txt = "La nouvelle version est téléchargée. Le jeu redémarre en une seconde, ta progression est conservée."; btns.push({label: "Redémarrer maintenant", primary: true, fn: () => { closeSheet("upd"); apply(); }}); }
+    else if (state === "downloading") { txt = `<div class="upd-bar"><i id="updPct" style="width:${pct}%"></i></div><p id="updLbl" class="lead small">Téléchargement…</p>`; }
+    else if (state === "installing") { txt = "Android va te demander de confirmer l'installation. Si c'est la première fois, autorise BlueScreen à installer des applications."; }
+    else if (p === "hot") { txt = "Mise à jour rapide (≈1 Mo) : pas besoin de réinstaller, ta progression est conservée."; btns.push({label: "Mettre à jour", primary: true, fn: () => { download(false); details(); }}); }
+    else if (p === "reload") { txt = "Recharge la page pour profiter de la nouvelle version. Ta progression est conservée."; btns.push({label: "Mettre à jour", primary: true, fn: () => { closeSheet("upd"); apply(); }}); }
+    else if (p === "altstore") { txt = "Cette version demande une nouvelle appli : ouvre <b>AltStore</b>, onglet « Mes applis », puis touche <b>Mettre à jour</b> à côté de BlueScreen."; btns.push({label: "Ouvrir AltStore", primary: true, fn: () => { try { BRIDGE.openApp ? BRIDGE.openApp("altstore://") : BRIDGE.openExternal(BASE + "installer/"); } catch (e) {} }}); }
+    else { txt = "Cette version demande une nouvelle appli (≈2 Mo). Elle s'installe par-dessus l'ancienne : tes parties et ta progression sont conservées."; btns.push({label: "Télécharger et installer", primary: true, fn: apk}); }
+    btns.push({label: state === "downloading" ? "Fermer" : "Plus tard", fn: () => { closeSheet("upd"); if (state === "available") store.set("eb_upd_snooze", info.version + "|" + (Date.now() + 864e5)); }});
+    sheet("upd", `Mise à jour ${esc(info.version)}`, `<p class="lead small">Tu as la version ${APP_VERSION}${info.date ? ` · nouvelle version du ${new Date(info.date + "T12:00:00").toLocaleDateString("fr-FR", {day: "numeric", month: "long"})}` : ""}.</p>${notesHTML(info.notes || [])}<div class="upd-how">${txt}</div>`, btns);
+  }
+  function banner() {
+    document.querySelectorAll(".upd-ban").forEach(e => e.remove());
+    if (!info || !newer() || state === "downloading" || !document.querySelector(".home2")) return;
+    const sn = store.get("eb_upd_snooze", "").split("|");
+    if (state !== "ready" && sn[0] === info.version && Date.now() < +sn[1]) return;
+    const el = document.createElement("button");
+    el.className = "upd-ban" + (state === "ready" ? " ready" : "");
+    el.innerHTML = `<span class="upd-dot"></span><span><b>${state === "ready" ? `Version ${esc(info.version)} prête` : `Nouvelle version ${esc(info.version)}`}</b><small>${state === "ready" ? "Toucher pour redémarrer le jeu" : "Toucher pour voir les nouveautés"}</small></span><span class="upd-go">${state === "ready" ? "Redémarrer" : "Voir"}</span>`;
+    el.onclick = () => state === "ready" ? apply() : details();
+    const host = document.querySelector(".home2 .hero"); if (host) host.after(el); else document.querySelector(".home2").prepend(el);
+  }
+  function refreshAbout() {
+    const el = $("#updState"); if (!el) return;
+    el.innerHTML = aboutHTML();
+    const b = $("#bUpd"); if (b) b.onclick = onAboutClick;
+  }
+  function aboutHTML() {
+    if (!enabled) return "";
+    const lbl = state === "ready" ? `Redémarrer pour passer en ${esc(info.version)}` : state === "downloading" ? `Téléchargement…${pct ? " " + pct + " %" : ""}` : state === "available" ? `Installer la version ${esc(info.version)}` : busy ? "Recherche…" : "Rechercher une mise à jour";
+    const sub = state === "uptodate" ? `<small class="upd-ok">✓ Tu as la dernière version</small>` : "";
+    return `<button class="btn ${state === "available" || state === "ready" ? "" : "ghost"}" id="bUpd" ${state === "downloading" || busy ? "disabled" : ""}>${lbl}</button>${sub}`;
+  }
+  function onAboutClick() { if (state === "ready") return apply(); if (state === "available") return details(); check(true); }
+
+  /* ----- nouveautés après une mise à jour ----- */
+  function whatsNew() {
+    const seen = store.get("eb_seen_ver", "");
+    const returning = seen || store.get("eb_tuto_done", "") || store.get("eb_name", "");
+    store.set("eb_seen_ver", APP_VERSION);
+    store.del("eb_upd_ready");
+    if (!returning || (seen && cmp(APP_VERSION, seen) <= 0)) return false;
+    const list = CHANGES.filter(c => cmp(c.version, APP_VERSION) <= 0 && (!seen || cmp(c.version, seen) > 0)).slice(0, 3);
+    if (!list.length) return false;
+    sheet("news", "Quoi de neuf ?", `<p class="lead small">BlueScreen est passé en version ${APP_VERSION}.</p>${list.map(c => `<h3 class="upd-v">Version ${esc(c.version)}</h3>${notesHTML(c.notes)}`).join("")}`, [{label: "C'est parti !", primary: true, fn: () => closeSheet("news")}]);
+    return true;
+  }
+
+  // appelé à chaque affichage de l'accueil
+  function onHome() {
+    if (!enabled) return;
+    if (!onHome.done) {
+      onHome.done = true;
+      setTimeout(() => { if (document.querySelector(".home2") && !document.querySelector(".overlay,.splash,.inst-ov")) whatsNew(); else store.set("eb_seen_ver", APP_VERSION); }, 2900);
+      setTimeout(() => check(false), 4000);
+      setInterval(() => { if (!G && Date.now() - +store.get("eb_upd_last", "0") > 6 * 3600e3) check(false); }, 30 * 60e3);
+    } else banner();
+  }
+  return {check, onHome, aboutHTML, onAboutClick, details, _hot, _apk, cmp, get state() { return state; }, get info() { return info; }, native, enabled};
+})();
+window.Update = Update;
+
 /* ============================== CONTEXTE ============================== */
 // "app" : page locale (appli ou fichier) ; "client" : page servie par le téléphone hôte en Wi-Fi.
 const LEVELS = {facile: "Facile", normal: "Normal", expert: "Expert"};
@@ -4699,6 +4894,7 @@ function renderHome() {
   $("#mRules").onclick = showRules;
   if ($("#mInstall")) $("#mInstall").onclick = () => Install.open(true);
   if (!renderHome.instAsked) { renderHome.instAsked = true; Install.maybeAuto(); }
+  Update.onHome();
 }
 function back() { return `<button class="btn ghost" id="bBack">Retour</button>`; }
 function powerPicker(cur) {
@@ -4990,6 +5186,7 @@ function renderAbout() {
   $("#app").innerHTML = `<div class="screen-pad"><h2>À propos</h2>
     <div class="rules" style="width:min(100%,360px)">
       <div class="verbox">${BRAND.mark}<div><b>BlueScreen</b><span>Version ${APP_VERSION}</span><span>Mise à jour du ${appDateFr()}</span></div></div>
+      <div id="updState" class="upd-about">${Update.aboutHTML()}</div>
       <p><b style="color:var(--ink)">BlueScreen</b> est un jeu de cartes original créé et édité par CYBERLOGIC.</p>
       <h3>CYBERLOGIC</h3>
       <p>CYBERLOGIC est une entreprise de services informatiques installée à Draveil (91). Elle accompagne les particuliers, les artisans et les PME sur trois métiers : le développement de logiciels et d'applications sur mesure, la formation (bureautique, Windows, bonnes pratiques numériques) et la cybersécurité (audits, sauvegardes, messagerie, VPN).</p>
@@ -5013,6 +5210,7 @@ function renderAbout() {
     try { navigator.clipboard.writeText(txt); showToast("Lien copié : jeu.cyberlogic.fr", "good"); } catch (e) { showToast("jeu.cyberlogic.fr", "info"); }
   }; $("#aSite").onclick = e => { e.preventDefault(); open(); };
   $("#bReport").onclick = reportProblem;
+  if ($("#bUpd")) $("#bUpd").onclick = Update.onAboutClick;
   $("#bBack").onclick = renderHome;
 }
 

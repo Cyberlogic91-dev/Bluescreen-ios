@@ -7,8 +7,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: "4.0"
-    CURRENT_PROJECT_VERSION: "34"
+    MARKETING_VERSION: "4.1"
+    CURRENT_PROJECT_VERSION: "35"
     DEVELOPMENT_TEAM: "XXXXXXXXXX"        # ← ton Team ID Apple (developer.apple.com > Membership)
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.9"

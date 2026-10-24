@@ -1,0 +1,16 @@
+{
+ "version": "4.1",
+ "build": 35,
+ "minNative": 2,
+ "date": "2026-10-24",
+ "notes": [
+  "Mises à jour automatiques : le jeu vérifie tout seul s'il existe une nouvelle version.",
+  "Mise à jour rapide en un clic dans l'appli, sans tout réinstaller.",
+  "Écran « Nouveautés » après chaque mise à jour.",
+  "Bouton « Rechercher une mise à jour » dans À propos."
+ ],
+ "page": "https://jeu.cyberlogic.fr/app/index.html",
+ "pageSize": 1072612,
+ "apk": "https://jeu.cyberlogic.fr/android/BlueScreen.apk",
+ "altstore": "https://jeu.cyberlogic.fr/altstore/source.json"
+}
