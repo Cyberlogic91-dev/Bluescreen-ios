@@ -768,6 +768,15 @@ table.score tr.win td{color:var(--gold);font-weight:800}
 .upd-bar i{display:block;height:100%;background:linear-gradient(90deg,#2f6bff,#5FA0FF);transition:width .3s}
 .upd-about{display:flex;flex-direction:column;align-items:stretch;gap:4px;margin:8px 0 4px}
 .upd-ok{color:#4ade80;text-align:center}
+.upd-apply{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(6,14,34,.88);backdrop-filter:blur(4px);animation:updIn .25s ease-out}
+.upd-apply>div{display:flex;flex-direction:column;align-items:center;gap:8px;color:#fff;text-align:center;min-width:220px}
+.upd-apply svg{width:64px;height:64px}
+.upd-apply small{color:#9fb3d9}
+.upd-apply .upd-bar{width:200px;display:block}
+.upd-apply .upd-bar i{animation:updLoad 1.3s ease-out}
+@keyframes updLoad{from{width:0}to{width:100%}}
+@keyframes updIn{from{opacity:0}to{opacity:1}}
+.upd-auto{justify-content:center;font-size:14px;margin:2px 0}
 </style>
 </head>
 <body>
@@ -907,6 +916,7 @@ function riskColor(w){const v=w/10;return v<=3?"#16A34A":v<=6?"#CA8A04":v<=8?"#E
 
 
 
+
 /* ---------- icônes ---------- */
 const ICON={
  "SOURIS":'<svg viewBox="0 0 40 50"><rect x="8" y="10" width="24" height="36" rx="12" fill="#E5E7EB" stroke="#1F2937" stroke-width="2"/><line x1="20" y1="10" x2="20" y2="25" stroke="#1F2937" stroke-width="2"/><line x1="8" y1="25" x2="32" y2="25" stroke="#1F2937" stroke-width="2"/><rect x="18" y="14" width="4" height="7" rx="2" fill="currentColor"/><path d="M20 10 C20 3 28 6 29 1" fill="none" stroke="#1F2937" stroke-width="2"/></svg>',
@@ -937,7 +947,7 @@ const MODE = window.EB_STANDALONE ? "app" : (location.protocol.indexOf("http") =
 const BRIDGE = (typeof window.EBHost !== "undefined") ? window.EBHost : null;
 const CAN_HOST = MODE === "app" && !!BRIDGE;
 const MAXP = 6;
-const APP_VERSION = "4.2";
+const APP_VERSION = "4.3";
 const APP_DATE = "2026-10-24";   // remplacée par la date de construction (build_page.py)
 function appDateFr() {
   const d = new Date(APP_DATE + "T12:00:00");
@@ -3609,6 +3619,16 @@ const Update = (() => {
   const BASE = "https://jeu.cyberlogic.fr/";
   const CHANGES = [
  {
+  "version": "4.3",
+  "build": 37,
+  "minNative": 3,
+  "notes": [
+   "Mises à jour 100 % automatiques : le jeu se met à jour tout seul, sans rien toucher.",
+   "La mise à jour attend que tu sois revenu à l'accueil : jamais pendant une partie.",
+   "Réglage « Mises à jour automatiques » dans À propos (activé par défaut)."
+  ]
+ },
+ {
   "version": "4.2",
   "build": 36,
   "minNative": 3,
@@ -3659,7 +3679,26 @@ const Update = (() => {
   const isIOSApp = !!BRIDGE && ((BRIDGE.platform && BRIDGE.platform() === "ios") || /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent));
   const isWeb = !!window.EB_STANDALONE && !BRIDGE && (location.protocol === "https:" || location.hostname === "localhost");
   const enabled = MODE === "app" && (isWeb || !!BRIDGE);
-  let info = null, state = "idle", pct = 0, busy = false;
+  let info = null, state = "idle", pct = 0, busy = false, pending = false, apkAuto = false;
+  const auto = () => store.get("eb_upd_auto", "1") !== "0";
+  // moment sans risque pour redémarrer : sur l'accueil, aucune partie, aucun salon, aucune fenêtre ouverte, rien en cours de saisie
+  function idle() {
+    return !G && !LOBBY && !(typeof Online !== "undefined" && (Online.guest || Online.hosting)) && C.net !== "online"
+      && !!document.querySelector(".home2") && !document.querySelector(".overlay,.inst-ov,.splash,.upd-apply")
+      && !(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName));
+  }
+  // applique la mise à jour dès que c'est possible (tout de suite si le joueur est sur l'accueil, sinon au retour à l'accueil)
+  function autoApply() {
+    if (!auto() || state !== "ready") return;
+    if (!idle()) { pending = true; return; }
+    pending = false;
+    const el = document.createElement("div");
+    el.className = "upd-apply"; el.setAttribute("role", "status");
+    el.innerHTML = `<div>${BRAND.mark}<b>Mise à jour ${esc(info.version)}</b><small>Installation en cours…</small><span class="upd-bar"><i style="width:100%"></i></span></div>`;
+    document.body.appendChild(el);
+    setTimeout(apply, 1400);
+  }
+  setInterval(() => { if (pending) autoApply(); if (apkAuto && idle()) { apkAuto = false; apk(true); } }, 4000);
 
   function cmp(a, b) {
     const x = String(a).split(".").map(n => parseInt(n, 10) || 0), y = String(b).split(".").map(n => parseInt(n, 10) || 0);
@@ -3685,7 +3724,10 @@ const Update = (() => {
       if (!newer()) { state = "uptodate"; if (manual) showToast(`Tu as la dernière version (${APP_VERSION})`, "good"); return info; }
       if (state === "ready" && store.get("eb_upd_ready", "") === info.version) return info;
       state = "available";
-      if (plan() === "hot" && !manual) download(true);   // téléchargée en arrière-plan, appliquée quand le joueur veut
+      const p = plan();
+      if (p === "hot" && (auto() || !manual)) download(true);          // téléchargée en arrière-plan puis appliquée automatiquement
+      else if (p === "reload" && auto() && !manual) { state = "ready"; autoApply(); banner(); }
+      else if (p === "apk" && auto() && !manual) { apkAuto = true; banner(); }   // Android demandera une confirmation (règle du système)
       else banner();
       if (manual) details();
       return info;
@@ -3704,7 +3746,7 @@ const Update = (() => {
     download.silent = silent;
   }
   function _hot(ok, msg) {
-    if (ok) { state = "ready"; store.set("eb_upd_ready", info ? info.version : ""); banner(); if (!download.silent) details(); }
+    if (ok) { state = "ready"; store.set("eb_upd_ready", info ? info.version : ""); banner(); if (auto()) autoApply(); else if (!download.silent) details(); }
     else { state = "available"; if (!download.silent) showToast("Téléchargement interrompu" + (msg ? " : " + msg : ""), "warn"); else banner(); }
     refreshAbout();
   }
@@ -3712,6 +3754,7 @@ const Update = (() => {
     store.set("eb_upd_from", APP_VERSION);
     if (G) { showToast("Termine ta partie, la mise à jour s'appliquera ensuite.", "info"); return; }
     if (state === "ready" && BRIDGE) { BRIDGE.goHome(); return; }
+    if (isWeb && state === "ready" && !info) return;
     if (isWeb) {
       const go = () => location.replace(location.pathname + "?v=" + encodeURIComponent(info ? info.version : Date.now()));
       if (navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(r => r ? r.update() : null).catch(() => {}).then(go); else go();
@@ -3719,9 +3762,9 @@ const Update = (() => {
   }
 
   /* ----- APK complet (Android, quand l'appli elle-même doit changer) ----- */
-  function apk() {
+  function apk(silent) {
     const url = info.apk || BASE + "android/BlueScreen.apk";
-    if (BRIDGE.installApk) { state = "downloading"; pct = 0; refreshAbout(); details(); BRIDGE.installApk(url); }
+    if (BRIDGE.installApk) { state = "downloading"; pct = 0; refreshAbout(); if (silent !== true) details(); BRIDGE.installApk(url); }
     else if (BRIDGE.openExternal) BRIDGE.openExternal(url);
   }
   function _apk(p, err) {
@@ -3762,13 +3805,18 @@ const Update = (() => {
   function refreshAbout() {
     const el = $("#updState"); if (!el) return;
     el.innerHTML = aboutHTML();
+    bindAbout();
+  }
+  function bindAbout() {
     const b = $("#bUpd"); if (b) b.onclick = onAboutClick;
+    const t = $("#cUpdAuto"); if (t) t.onchange = () => { store.set("eb_upd_auto", t.checked ? "1" : "0"); showToast(t.checked ? "Mises à jour automatiques activées" : "Mises à jour automatiques désactivées", "info"); if (t.checked) check(false); };
   }
   function aboutHTML() {
     if (!enabled) return "";
     const lbl = state === "ready" ? `Redémarrer pour passer en ${esc(info.version)}` : state === "downloading" ? `Téléchargement…${pct ? " " + pct + " %" : ""}` : state === "available" ? `Installer la version ${esc(info.version)}` : busy ? "Recherche…" : "Rechercher une mise à jour";
     const sub = state === "uptodate" ? `<small class="upd-ok">✓ Tu as la dernière version</small>` : "";
-    return `<button class="btn ${state === "available" || state === "ready" ? "" : "ghost"}" id="bUpd" ${state === "downloading" || busy ? "disabled" : ""}>${lbl}</button>${sub}`;
+    const tog = `<label class="check upd-auto"><input type="checkbox" id="cUpdAuto" ${auto() ? "checked" : ""}> Mises à jour automatiques</label>`;
+    return tog + `<button class="btn ${state === "available" || state === "ready" ? "" : "ghost"}" id="bUpd" ${state === "downloading" || busy ? "disabled" : ""}>${lbl}</button>${sub}`;
   }
   function onAboutClick() { if (state === "ready") return apply(); if (state === "available") return details(); check(true); }
 
@@ -3791,11 +3839,13 @@ const Update = (() => {
     if (!onHome.done) {
       onHome.done = true;
       setTimeout(() => { if (document.querySelector(".home2") && !document.querySelector(".overlay,.splash,.inst-ov")) whatsNew(); else store.set("eb_seen_ver", APP_VERSION); }, 2900);
-      setTimeout(() => check(false), 4000);
-      setInterval(() => { if (!G && Date.now() - +store.get("eb_upd_last", "0") > 6 * 3600e3) check(false); }, 30 * 60e3);
-    } else banner();
+      setTimeout(() => check(false), 3500);
+      const due = ms => Date.now() - +store.get("eb_upd_last", "0") > ms;
+      setInterval(() => { if (due(3600e3)) check(false); }, 10 * 60e3);           // toutes les heures
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && due(20 * 60e3)) check(false); });   // au retour dans l'appli
+    } else { banner(); if (pending) setTimeout(autoApply, 600); }
   }
-  return {check, onHome, aboutHTML, onAboutClick, details, _hot, _apk, cmp, get state() { return state; }, get info() { return info; }, native, enabled};
+  return {check, onHome, aboutHTML, onAboutClick, bindAbout, details, _hot, _apk, cmp, get state() { return state; }, get info() { return info; }, native, enabled};
 })();
 window.Update = Update;
 
@@ -5341,7 +5391,7 @@ function renderAbout() {
     try { navigator.clipboard.writeText(txt); showToast("Lien copié : jeu.cyberlogic.fr", "good"); } catch (e) { showToast("jeu.cyberlogic.fr", "info"); }
   }; $("#aSite").onclick = e => { e.preventDefault(); open(); };
   $("#bReport").onclick = reportProblem;
-  if ($("#bUpd")) $("#bUpd").onclick = Update.onAboutClick;
+  Update.bindAbout();
   $("#bBack").onclick = renderHome;
 }
 

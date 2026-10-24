@@ -1,16 +1,15 @@
 {
- "version": "4.2",
- "build": 36,
+ "version": "4.3",
+ "build": 37,
  "minNative": 3,
  "date": "2026-10-24",
  "notes": [
-  "Sécurité renforcée du mode en ligne : chaque joueur a sa propre clé secrète, personne ne peut voir ta main.",
-  "Codes de salle plus longs (10 caractères) et chiffrement plus solide.",
-  "Les mises à jour de l'appli sont désormais signées par CYBERLOGIC et vérifiées avant installation.",
-  "Protection contre les contenus malveillants envoyés par d'autres joueurs."
+  "Mises à jour 100 % automatiques : le jeu se met à jour tout seul, sans rien toucher.",
+  "La mise à jour attend que tu sois revenu à l'accueil : jamais pendant une partie.",
+  "Réglage « Mises à jour automatiques » dans À propos (activé par défaut)."
  ],
  "page": "https://jeu.cyberlogic.fr/app/index.html",
- "pageSize": 1081331,
+ "pageSize": 1084692,
  "apk": "https://jeu.cyberlogic.fr/android/BlueScreen.apk",
  "altstore": "https://jeu.cyberlogic.fr/altstore/source.json"
 }
